@@ -54,12 +54,15 @@ static const Card kCards[] = {
     { 0, 206, 238, L"LAUNCHER" },
     { 1, 22, 138, L"RESOLUTION" },
     { 1, 144, 238, L"SHAPE" },
+    { 2, 22, 70, L"PHOTO MODE" },
+    { 2, 76, 238, L"CONTROLS" },
 };
 static int g_tab = 0;
 static int g_resW = 1920, g_resH = 1200;   // selected render size (H = 0: game default)
 static const int kTab0Ids[] = { IDC_L_FPS, IDC_FPS, IDC_L_MENU, IDC_MENUFPS, IDC_HFR, IDC_QTE, IDC_BLADE, IDC_L_EASE, IDC_EASE,
                                 IDC_EASEVAL, IDC_L_PIECES, IDC_KEEPCUTS, IDC_L_BODIES, IDC_KEEPBODIES, IDC_L_INTRO, IDC_INTRO, IDC_PREVIEW };
 static const int kTab1Ids[] = { IDC_L_RES, IDC_RES, IDC_VERTPLUS, IDC_RESINFO, IDC_RESNOTE };
+static const int kTab2Ids[] = { IDC_PHOTO, IDC_PHOTONOTE, IDC_PHOTOPAD, IDC_PHOTOPAD2, IDC_PHOTOKB, IDC_PHOTOKB2 };
 
 static HBRUSH g_bgBrush, g_cardBrush, g_accentBrush;
 static HFONT  g_titleFont, g_subFont, g_sectionFont, g_uiFont, g_btnFont;
@@ -256,7 +259,7 @@ static void DrawButton(const DRAWITEMSTRUCT* di)
     Graphics& g = *gp;
     g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-    if (di->CtlID == IDC_TAB0 || di->CtlID == IDC_TAB1) {   // tabs: active one has an accent underline
+    if (di->CtlID == IDC_TAB0 || di->CtlID == IDC_TAB1 || di->CtlID == IDC_TAB2) {   // tabs: active one has an accent underline
         const bool active = int(di->CtlID - IDC_TAB0) == g_tab;
         if (active) {
             SolidBrush u(C(kAccent));
@@ -485,7 +488,7 @@ static void ApplyWindowTheme(HWND dlg)
     DwmSetWindowAttribute(dlg, 34 /* DWMWA_BORDER_COLOR */, &border, sizeof border);
 }
 
-static bool IsToggle(int id) { return id == IDC_HFR || id == IDC_QTE || id == IDC_BLADE || id == IDC_VERTPLUS; }
+static bool IsToggle(int id) { return id == IDC_HFR || id == IDC_QTE || id == IDC_BLADE || id == IDC_VERTPLUS || id == IDC_PHOTO; }
 static bool GetToggle(HWND dlg, int id) { return GetWindowLongPtrW(GetDlgItem(dlg, id), GWLP_USERDATA) != 0; }
 static void SetToggle(HWND dlg, int id, bool on)
 {
@@ -933,6 +936,9 @@ static void WriteDefaults()
     WriteInt(L"Debris", L"LogDebris", cfg::kLogDebris);
     WriteInt(L"Launcher", L"Intro", cfg::kIntro);
     WriteInt(L"Launcher", L"Sound", cfg::kSound);
+    WriteInt(L"PhotoMode", L"Enabled", cfg::kPhotoMode);
+    WriteInt(L"PhotoMode", L"Key", cfg::kPhotoKey);
+    WriteInt(L"PhotoMode", L"SpeedCmPerSec", cfg::kPhotoSpeed);
 }
 
 static int AddItem(HWND combo, const wchar_t* text, int value)
@@ -1026,6 +1032,7 @@ static void Load(HWND dlg)
         SendMessageW(res, CB_SETCURSEL, found, 0);
     }
     SetToggle(dlg, IDC_VERTPLUS, ReadInt(L"Display", L"VertPlusFov", cfg::kVertPlusFov) != 0);
+    SetToggle(dlg, IDC_PHOTO, ReadInt(L"PhotoMode", L"Enabled", cfg::kPhotoMode) != 0);
 
     int ease = ReadInt(L"Fixes", L"QteEase", cfg::kQteEase);
     ease = ease < 10 ? 10 : ease > 100 ? 100 : ease;
@@ -1058,6 +1065,7 @@ static void Save(HWND dlg)
     // Older mod builds only read Height1920 (width fixed at 1920); keep it in step.
     WriteInt(L"Display", L"Height1920", res && ((res >> 16) & 0xFFFF) == 1920 ? (res & 0xFFFF) : 0);
     WriteInt(L"Display", L"VertPlusFov", GetToggle(dlg, IDC_VERTPLUS));
+    WriteInt(L"PhotoMode", L"Enabled", GetToggle(dlg, IDC_PHOTO));
     WriteInt(L"Debris", L"KeepLastCuts", SelectedValue(GetDlgItem(dlg, IDC_KEEPCUTS)));
     WriteInt(L"Debris", L"KeepCorpses", SelectedValue(GetDlgItem(dlg, IDC_KEEPBODIES)));
     WriteInt(L"Launcher", L"Intro", SelectedValue(GetDlgItem(dlg, IDC_INTRO)));
@@ -1085,7 +1093,9 @@ static void ShowTab(HWND dlg, int tab)
     g_tab = tab;
     for (int id : kTab0Ids) ShowWindow(GetDlgItem(dlg, id), tab == 0 ? SW_SHOW : SW_HIDE);
     for (int id : kTab1Ids) ShowWindow(GetDlgItem(dlg, id), tab == 1 ? SW_SHOW : SW_HIDE);
+    for (int id : kTab2Ids) ShowWindow(GetDlgItem(dlg, id), tab == 2 ? SW_SHOW : SW_HIDE);
     InvalidateRect(dlg, nullptr, FALSE);
+    InvalidateRect(GetDlgItem(dlg, IDC_TAB2), nullptr, FALSE);
     InvalidateRect(GetDlgItem(dlg, IDC_TAB0), nullptr, FALSE);
     InvalidateRect(GetDlgItem(dlg, IDC_TAB1), nullptr, FALSE);
 }
@@ -1146,6 +1156,7 @@ static void AddTooltips(HWND dlg)
         { IDC_RES, L"The size the game renders at when '1920x1080' is selected in its own options. Pick your screen's resolution for a sharp, full-screen picture." },
         { IDC_L_RES, L"The size the game renders at when '1920x1080' is selected in its own options. Pick your screen's resolution for a sharp, full-screen picture." },
         { IDC_VERTPLUS, L"Keeps the picture from looking zoomed in on screens that are not 16:9: taller screens get more view above and below, wider screens more at the sides. Also keeps the 3D HUD layer at the right size." },
+        { IDC_PHOTO, L"In game, F10 freezes everything, hides the HUD and lets you fly the camera to take screenshots (PrtSc with ReShade, F12 with Steam). F10 again resumes the game where it stopped." },
         { IDC_SAVE, L"Save the settings to hfblade.ini." },
         { IDC_PLAY, L"Save the settings and start the game through Steam." },
     };
@@ -1185,7 +1196,7 @@ static INT_PTR CALLBACK DlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         g_sectionFont = MakeFont(dlg, 8, FW_BOLD, L"Segoe UI");
         g_uiFont = MakeFont(dlg, 9, FW_NORMAL, L"Segoe UI");
         g_btnFont = MakeFont(dlg, 9, FW_SEMIBOLD, L"Segoe UI");
-        const int owner[] = { IDC_HFR, IDC_QTE, IDC_BLADE, IDC_VERTPLUS, IDC_PLAY, IDC_SAVE, IDC_XMIN, IDC_XCLOSE, IDC_PREVIEW, IDC_MUTE, IDC_TAB0, IDC_TAB1 };
+        const int owner[] = { IDC_HFR, IDC_QTE, IDC_BLADE, IDC_VERTPLUS, IDC_PLAY, IDC_SAVE, IDC_XMIN, IDC_XCLOSE, IDC_PREVIEW, IDC_MUTE, IDC_TAB0, IDC_TAB1, IDC_TAB2, IDC_PHOTO };
         for (int id : owner) SetWindowSubclass(GetDlgItem(dlg, id), HoverProc, 1, 0);
         SetDlgItemTextW(dlg, IDC_HINT, kHint);
         SetWindowTextW(dlg, L"HF Blade");
@@ -1243,7 +1254,7 @@ static INT_PTR CALLBACK DlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         SetBkMode(dc, OPAQUE);
         const bool footer = id == IDC_HINT || id == IDC_WARN;
         SetBkColor(dc, footer ? kBg : kCard);
-        SetTextColor(dc, id == IDC_WARN ? kWarn : id == IDC_HINT || id == IDC_RESNOTE ? kMuted
+        SetTextColor(dc, id == IDC_WARN ? kWarn : id == IDC_HINT || id == IDC_RESNOTE || id == IDC_PHOTONOTE || id == IDC_PHOTOPAD2 || id == IDC_PHOTOKB2 ? kMuted
                          : id == IDC_EASEVAL || id == IDC_RESINFO ? kAccentHi : kText);
         SelectObject(dc, id == IDC_EASEVAL ? g_btnFont : g_uiFont);
         return (INT_PTR)(footer ? g_bgBrush : g_cardBrush);
@@ -1307,6 +1318,7 @@ static INT_PTR CALLBACK DlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             return TRUE;
         case IDC_TAB0:
         case IDC_TAB1:
+        case IDC_TAB2:
             ShowTab(dlg, id - IDC_TAB0);
             return TRUE;
         case IDC_MUTE:

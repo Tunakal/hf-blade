@@ -31,3 +31,10 @@
 #define IDC_RESNOTE    1039
 #define IDC_TAB0       1040
 #define IDC_TAB1       1041
+#define IDC_TAB2       1042
+#define IDC_PHOTO      1043
+#define IDC_PHOTOPAD   1044
+#define IDC_PHOTOKB    1045
+#define IDC_PHOTONOTE  1046
+#define IDC_PHOTOPAD2  1047
+#define IDC_PHOTOKB2   1048

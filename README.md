@@ -5,10 +5,13 @@ remaster-like experience:
 - high frame rate (60–240 fps) with real-time gameplay, QTE and Blade Mode timing;
 - 16:10, wide and ultrawide with an aspect-correct FOV;
 - persistent cut debris and enemy bodies;
+- a photo mode (freeze, free camera, hidden HUD);
 - a settings launcher.
 
-> Status: **work in progress.** 120 fps, the unlocked menus, 16:10 and persistent bodies are
-> confirmed in game. The rest is untested. Keep a backup of your save.
+> Status: **work in progress.** Confirmed in game: 120 fps, the unlocked menus, 16:10, the
+> Sundowner shield QTE, persistent bodies and debris (including objective progress and zandatsu),
+> and the photo mode (freeze, free camera, hidden HUD, paused audio). Ultrawide and frame rates other
+> than 120 are untested. Keep a backup of your save.
 
 ## Why the game breaks above 60 fps
 
@@ -74,6 +77,13 @@ automatically on first start.
   instead of exploding and vanishing. Older cuts are cleaned up normally.
 - **Bodies** (`[Debris] KeepCorpses`, default 3): the bodies of the last N killed enemies stay on the
   ground. So far this covers the common cyborg soldiers and one other enemy type.
+  "Kill all enemies" objectives complete as soon as the last enemy is dead, even if bodies or pieces
+  are still lying around. The target of a zandatsu (spine grab) still disappears as in the original
+  game.
+- **Photo mode** (`[PhotoMode]`, **F10**): freezes the world, hides the HUD and gives you a free
+  camera with FOV and roll. Use a controller or keyboard + mouse; the launcher's Photo Mode tab
+  lists the controls. Take the picture with PrtSc (ReShade) or F12 (Steam), then press F10 again to
+  resume where you stopped. Game sounds and music pause while it is on (`PauseAudio`).
 - Any other `TargetFPS` from 60 to 240 can be set in the ini. The launcher shows it as "Custom".
 
 To actually reach 120 fps you need a 120 Hz+ display, or V-Sync turned off (for example in dgVoodoo).

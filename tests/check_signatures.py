@@ -43,11 +43,17 @@ SITES = {"Limiter": (0xF98070, bytes.fromhex("558BEC83E4F8")),
          "TugDecay": (0x584C4B, bytes.fromhex("D88E3C090000")),
          "DebrisPiece": (0x5DDA84, bytes.fromhex("399E280900000F8572030000")),
          "DebrisGroup": (0x942DCA, bytes.fromhex("8D44241050")),
-         "DebrisReduce": (0x5D9560, bytes.fromhex("568BF183BE8008000000"))}
+         "DebrisReduce": (0x5D9560, bytes.fromhex("568BF183BE8008000000")),
+         "UiExec": (0xF9AE76, bytes.fromhex("8B480C8B4008")),
+         "EmSetDebrisGate": (0xCA7BFB, bytes.fromhex("395C2414750F")),
+         "ZanRegister": (0x941450, bytes.fromhex("5153555657 8D6950".replace(" ", ""))),
+         "SndPost": (0xE5E050, bytes.fromhex("83EC0C8B4424108B4C2414")),
+         "SndPostBgm": (0xE5E1B0, bytes.fromhex("8B442404566A0050E8"))}
 RATE_CALLS = (0x5CC9B8, 0x5CD009, 0x5CD063, 0x5CD1DE, 0x5CD35E, 0x5CD4DF, 0x5CD64E, 0x5CD7CE, 0x5CDDE8,
               0x5CDF77, 0x5CE193, 0x5CE67E, 0x5CE7FE, 0x5CE97D, 0x5CEBFD, 0x8CE295, 0xAE44C7)
 CORPSE_CALLS = {0xB3F668: 0xB346D0, 0xB3F8C7: 0xB346D0, 0xB3F9B8: 0xB346D0, 0xB35ABA: 0xB346D0,
                 0xB6D1EF: 0xB67710, 0xB6D3EE: 0xB67710, 0xB6DBA6: 0xB67710}
+PHOTO_CALLS = {0xDB8097: 0xDB7E00, 0xA1E8A7: 0xDF7C00}   # view build, pad gate
 ACTOR_CALLS = (0x5DDFBE, 0x5DE4EE, 0x5E662E)   # -> 0xA8B7F0
 PROJ_CALLS = (0x985F6C, 0xA28128, 0xA460F6, 0xCACB8D, 0xCACC2D, 0xD1E43E, 0xD1E47C, 0xDE5B18, 0xF43CFB)
 RELOCATED = {"QteFsub%d" % i: (va, 0x0163CCE0) for i, va in
@@ -105,6 +111,12 @@ try:
         good_c += c[0] == 0xE8 and va + 5 + struct.unpack("<i", c[1:])[0] == tgt
     print("Corpse   %d/%d vanish calls %s" % (good_c, len(CORPSE_CALLS), "OK" if good_c == len(CORPSE_CALLS) else "MISMATCH"))
     ok &= good_c == len(CORPSE_CALLS)
+    good_p = 0
+    for va, tgt in PHOTO_CALLS.items():
+        c = read(pi.hProcess, va + delta, 5)
+        good_p += c[0] == 0xE8 and va + 5 + struct.unpack("<i", c[1:])[0] == tgt
+    print("Photo    %d/%d calls %s" % (good_p, len(PHOTO_CALLS), "OK" if good_p == len(PHOTO_CALLS) else "MISMATCH"))
+    ok &= good_p == len(PHOTO_CALLS)
     p = read(pi.hProcess, 0xF97F90 + delta, 5)
     operand = struct.unpack("<I", p[1:])[0]
     good = p[0] == 0xA1 and operand == (0x01F206D4 + delta) & 0xFFFFFFFF

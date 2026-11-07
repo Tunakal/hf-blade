@@ -22,6 +22,7 @@ FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
     CONTROL         "GAMEPLAY", IDC_TAB0, "Button", BS_OWNERDRAW | WS_TABSTOP, 206, 2, 52, 16
     CONTROL         "DISPLAY", IDC_TAB1, "Button", BS_OWNERDRAW | WS_TABSTOP, 260, 2, 46, 16
+    CONTROL         "PHOTO MODE", IDC_TAB2, "Button", BS_OWNERDRAW | WS_TABSTOP, 308, 2, 64, 16
     CONTROL         "", IDC_MUTE, "Button", BS_OWNERDRAW | WS_TABSTOP, 404, 0, 20, 14
     CONTROL         "", IDC_XMIN, "Button", BS_OWNERDRAW, 424, 0, 20, 14
     CONTROL         "", IDC_XCLOSE, "Button", BS_OWNERDRAW, 444, 0, 20, 14
@@ -59,6 +60,16 @@ BEGIN
     CONTROL         "Aspect-correct field of view", IDC_VERTPLUS, "Button", BS_OWNERDRAW | WS_TABSTOP, 212, 53, 236, 12
     LTEXT           "", IDC_RESINFO, 214, 72, 234, 20
     LTEXT           "The mod replaces the game's 1920x1080 option. In the game's graphics settings, pick 1920x1080 and fullscreen; it is then rendered at the size chosen here, with no black bars.", IDC_RESNOTE, 214, 98, 234, 34
+
+    // ===== PHOTO MODE tab =====
+    // PHOTO MODE card: y 22..70
+    CONTROL         "Enable photo mode  (F10 in game)", IDC_PHOTO, "Button", BS_OWNERDRAW | WS_TABSTOP, 212, 37, 236, 12
+    LTEXT           "Freezes the game, hides the HUD and gives you a free camera. Press F10 again to continue playing.", IDC_PHOTONOTE, 214, 52, 234, 16
+    // CONTROLS card: y 76..238
+    LTEXT           "CONTROLLER\n\nLeft stick\nRight stick\nLT / RT\nLB / RB\nD-pad up / down\nL3 (hold)\nY\nX", IDC_PHOTOPAD, 214, 92, 62, 140, SS_NOPREFIX
+    LTEXT           "\n\nmove\nlook\ndown / up\nroll\nzoom in / out\nfaster\nreset\nHUD on / off", IDC_PHOTOPAD2, 278, 92, 54, 140, SS_NOPREFIX
+    LTEXT           "KEYBOARD\n\nW A S D\nMouse / arrows\nCtrl / Space\nQ / E\nZ / X\nShift / Alt\nR\nH", IDC_PHOTOKB, 336, 92, 60, 140, SS_NOPREFIX
+    LTEXT           "\n\nmove\nlook\ndown / up\nroll\nzoom in / out\nfaster / slower\nreset\nHUD on / off", IDC_PHOTOKB2, 398, 92, 52, 140, SS_NOPREFIX
 
     LTEXT           "", IDC_HINT, 206, 245, 250, 9
     LTEXT           "", IDC_WARN, 206, 256, 250, 9

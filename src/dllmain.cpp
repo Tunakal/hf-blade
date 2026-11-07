@@ -537,11 +537,20 @@ static void PollPreset()
     wasDown = down;
 }
 
+static void PhotoTick(float dt);   // photomode.inl
+
 extern "C" void __cdecl LimiterHook()
 {
     g_present();
     PollToggle();
     PollPreset();
+    {   // photo mode input/state, with real-time dt
+        static int64_t last = 0;
+        const int64_t now = Now();
+        const float dt = last ? float(double(now - last) / double(g_freq.QuadPart)) : 0.0f;
+        last = now;
+        PhotoTick(dt);
+    }
     TraceState();
     TraceInput();
     UpdateFrameScalars();
@@ -725,12 +734,80 @@ static void NoteThread()
     Log("debris: piece update on thread %lu (%d thread(s) so far)", tid, nSeen);
 }
 
+// Zandatsu: on entering a cut-and-grab, the player state registers the target's debris group with
+// DebrisExplodeManager 0x941450 (thiscall, [esp+4] = group). In vanilla those pieces are deleted when
+// the grab ends (via the enemy's vanish -> 0x940450); kept, they would hang in the air. Such groups
+// are excluded from both persistent features.
+static const uintptr_t VA_ZAN_REGISTER = 0x00941450;   // PUSH ECX/EBX/EBP/ESI/EDI; LEA EBP,[ECX+0x50]
+static const uint8_t   kZanRegisterOrig[] = { 0x51, 0x53, 0x55, 0x56, 0x57, 0x8D, 0x69, 0x50 };
+static uint32_t g_zanGroups[16];
+static int      g_zanPos = 0;
+extern "C" { uintptr_t g_zanResume = 0; }
+
+static bool IsZanGroupLocked(uint32_t group)
+{
+    if (group == 0 || group == 0xFFFFFFFFu) return false;
+    for (uint32_t z : g_zanGroups) if (z == group) return true;
+    return false;
+}
+
+static void DropPieceLocked(const void* piece)
+{
+    for (int k = 0; k < g_evCount; ++k) {
+        DebrisEvent& e = g_events[(g_evNewest - k + _countof(g_events)) % _countof(g_events)];
+        for (int i = 0; i < e.n; ++i)
+            if (e.pieces[i] == piece) { e.pieces[i] = e.pieces[--e.n]; return; }
+    }
+}
+
+extern "C" void __cdecl DebrisNoteZandatsu(uint32_t group)
+{
+    if (group == 0 || group == 0xFFFFFFFFu) return;
+    DebrisGuard guard;
+    if (!IsZanGroupLocked(group)) { g_zanGroups[g_zanPos] = group; g_zanPos = (g_zanPos + 1) % (int)_countof(g_zanGroups); }
+    for (int k = 0; k < g_evCount; ++k) {   // stop protecting that group
+        DebrisEvent& e = g_events[(g_evNewest - k + _countof(g_events)) % _countof(g_events)];
+        for (int i = 0; i < e.ng; ++i)
+            if (e.groups[i] == group) { e.groups[i] = e.groups[--e.ng]; break; }
+    }
+    if (g_logDebris) Log("debris: zandatsu group 0x%08X excluded", group);
+}
+
+extern "C" bool __cdecl DebrisIsZandatsuGroup(uint32_t group)
+{
+    DebrisGuard guard;
+    return IsZanGroupLocked(group);
+}
+
+// Entry detour of 0x941450 (thiscall: ECX = manager, [ESP+4] = group, [ESP+8] = collision group).
+extern "C" __declspec(naked) void ZanRegisterHook()
+{
+    __asm {
+        push  ecx
+        push  edx
+        mov   eax, dword ptr [esp + 12]
+        push  eax
+        call  DebrisNoteZandatsu
+        add   esp, 4
+        pop   edx
+        pop   ecx
+        push  ecx
+        push  ebx
+        push  ebp
+        push  esi
+        push  edi
+        lea   ebp, [ecx + 0x50]
+        jmp   dword ptr [g_zanResume]
+    }
+}
+
 // Called for every live piece each frame. Returns 1 if the piece belongs to one of the last N cuts.
 extern "C" int __cdecl DebrisOnPiece(uint8_t* piece)
 {
     DebrisGuard guard;
     if (g_logDebris) NoteThread();
     const uint32_t group = *reinterpret_cast<uint32_t*>(piece + 0x83C);
+    if (IsZanGroupLocked(group)) { DropPieceLocked(piece); return 0; }   // zandatsu pieces vanish as usual
     for (int k = 0; k < g_evCount; ++k) {
         DebrisEvent& e = g_events[(g_evNewest - k + _countof(g_events)) % _countof(g_events)];
         if (Contains(e.pieces, e.n, piece)) { AddGroup(e, group); return 1; }   // group may be assigned later
@@ -879,6 +956,33 @@ extern "C" __declspec(naked) void DebrisReduceHook()
     }
 }
 
+// "Kill all enemies (and let their pieces finish)" objectives: the EmSet update 0xca7b20 sets a group's
+// done flag G+0x654 only when no slot still owns a debris group (counted at [esp+0x14]). Kept pieces and
+// kept bodies never release theirs, so those objectives would never complete. 0xca7bff "JNE skip" is
+// removed so the group completes as soon as all its waves are done (vanilla waits a few seconds for
+// the pieces to explode first).
+static const uintptr_t VA_EMSET_DEBRIS_GATE = 0x00CA7BFB;   // CMP [ESP+0x14],EBX; JNE +0x0F
+static const uint8_t   kEmSetGateOrig[] = { 0x39, 0x5C, 0x24, 0x14, 0x75, 0x0F };
+static void UnblockDebrisObjectives()
+{
+    static bool done = false;
+    if (done) return;
+    done = true;
+    // Zandatsu exclusion (shared by kept pieces and kept bodies).
+    if (Matches("ZanRegister", VA_ZAN_REGISTER, kZanRegisterOrig, sizeof kZanRegisterOrig)) {
+        g_zanResume = VA_ZAN_REGISTER + g_delta + sizeof kZanRegisterOrig;
+        WriteJmp(VA_ZAN_REGISTER, &ZanRegisterHook, sizeof kZanRegisterOrig);
+        Log("Debris: zandatsu targets are excluded from kept pieces/bodies.");
+    } else Log("Debris: zandatsu register not matched; grabbed pieces may hang in the air.");
+    if (!Matches("EmSetDebrisGate", VA_EMSET_DEBRIS_GATE, kEmSetGateOrig, sizeof kEmSetGateOrig)) {
+        Log("Debris: objective gate not matched; 'finish debris' objectives may wait for kept pieces.");
+        return;
+    }
+    const uint8_t nops[2] = { 0x90, 0x90 };
+    WriteBytes(VA_EMSET_DEBRIS_GATE + 4, nops, sizeof nops);
+    Log("Debris: kill-all objectives no longer wait for kept pieces/bodies.");
+}
+
 static void InstallDebris(const char* ini)
 {
     g_keepCuts = GetPrivateProfileIntA("Debris", "KeepLastCuts", cfg::kKeepLastCuts, ini);
@@ -910,6 +1014,7 @@ static void InstallDebris(const char* ini)
     g_debrisPreFn = VA_DEBRIS_PRE_FN + g_delta;
     for (uintptr_t va : VA_DEBRIS_ACTOR_CALLS) WriteCall(va, &DebrisActorHook, 5);
     Log("Debris: keeping the pieces of the last %d cut(s) (objects + 3 enemy-part types).", g_keepCuts);
+    UnblockDebrisObjectives();
 }
 
 
@@ -952,6 +1057,7 @@ extern "C" int __cdecl CorpseKeep(uint8_t* obj, int site, int ebxValue)
     const CorpseSite& cs = kCorpseSites[site];
     if (cs.kind == 0 && (*reinterpret_cast<uint32_t*>(obj + 0xDD4) & 0x100)) return 0;  // special death
     if (cs.kind == 1 && *reinterpret_cast<uint32_t*>(obj + 0xA50) == 0) return 0;        // instant vanish
+    if (DebrisIsZandatsuGroup(*reinterpret_cast<uint32_t*>(obj + 0x83C))) return 0;      // zandatsu target
 
     AcquireSRWLockExclusive(&g_corpseLock);
     struct Unlock { ~Unlock() { ReleaseSRWLockExclusive(&g_corpseLock); } } unlock;
@@ -1148,7 +1254,10 @@ static void InstallCorpses(const char* ini)
     g_vanish0030 = VA_VANISH_0030 + g_delta;
     for (size_t i = 0; i < _countof(kCorpseSites); ++i) WriteCall(kCorpseSites[i].va, reinterpret_cast<const void*>(kCorpseStubs[i]), 5);
     Log("Corpses: keeping the last %d enemy bodies (Em0010, Em0030; %u vanish calls).", g_keepCorpses, (unsigned)_countof(kCorpseSites));
+    UnblockDebrisObjectives();
 }
+
+#include "photomode.inl"
 
 static void Install()
 {
@@ -1175,6 +1284,7 @@ static void Install()
     InstallVertPlus();
     InstallDebris(ini);
     InstallCorpses(ini);
+    InstallPhotoMode(ini);
 
     bool ok = Matches("Limiter", VA_LIMITER, kLimiterOrig, sizeof kLimiterOrig);
     ok &= Matches("Clamp", VA_CLAMP_SITE, kClampOrig, sizeof kClampOrig);

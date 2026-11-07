@@ -31,6 +31,9 @@ static const int kVertPlusFov  = 1;     // [Display] VertPlusFov
 static const int kKeepLastCuts = 2;     // [Debris] KeepLastCuts, 0 = off, max 8
 static const int kKeepCorpses  = 3;     // [Debris] KeepCorpses, 0 = off, max 8
 static const int kLogDebris    = 0;     // [Debris] LogDebris
+static const int kPhotoMode    = 1;     // [PhotoMode] Enabled
+static const int kPhotoKey     = 0x79;  // [PhotoMode] Key, F10
+static const int kPhotoSpeed   = 400;   // [PhotoMode] SpeedCmPerSec
 static const int kSound        = 1;     // [Launcher] Sound: cut sound effects on/off
 static const int kIntro        = 2;     // [Launcher] Intro: 0 = off, 1 = single cut (classic), 2 = flurry
 

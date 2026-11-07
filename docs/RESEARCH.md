@@ -409,6 +409,94 @@ Fuller notes are in `evidence/corpse_notes-2026-11-06.md`.
   vanish functions;
 - kill-volume removal (`0x00b35560`).
 
+### 15b. Kept bodies and pieces vs. objectives, and zandatsu
+
+First photo-mode test (2026-11-07): some "kill all enemies" objectives never completed, and after a
+zandatsu the grabbed enemy's pieces hung in the air.
+
+**Objectives**
+- Layout of the EmSet update `0x00ca7b20`:
+  - set = `0x01c78cb0 + 0x20 + s·0x7170`;
+  - group G = set `+ 0x40 + g·0x660`;
+  - slot = G `+ 0x30 + k·0x40`.
+- `slot+4` holds the enemy's debris group id. Every frame, each slot is checked with `0x0093db40`
+  ("does a debris group with this id exist").
+- G+0x654 ("finished, debris included") is set only when no slot still has a group and G+1 (all
+  waves done) is set. The `cCondEnemy*FinishDebris*` conditions read G+0x654.
+- Kept bodies (vanish skipped) and kept pieces never release their group, so these objectives were
+  stuck.
+- **Patch:** at `0x00ca7bfb` (`39 5C 24 14 75 0F`) the `JNE` is NOPed, so G+0x654 is set as soon as
+  G+1 is.
+  - It is applied only when KeepLastCuts or KeepCorpses is on.
+  - Vanilla waits a few seconds for the pieces to explode first.
+
+**Zandatsu**
+- On entering a cut-and-grab state, the player calls `0x00941450` (DebrisExplodeManager, thiscall,
+  `[esp+4]` = the target's group id).
+- In vanilla, the pieces are deleted when the grab ends: the enemy's vanish calls `0x00940450`.
+- **Patch:** an entry detour at `0x00941450` (`51 53 55 56 57 8D 69 50`) records those group ids.
+  Pieces and bodies of a recorded group are no longer kept, so they vanish as in vanilla.
+
+## 16. Photo mode (static, delegated; hook bytes verified by me)
+
+Fuller notes are in `evidence/photo_*.md`.
+
+**Freeze**
+- Bit 31 of `0x01bea070` is the game's own "stop world" flag. Script actions set it at `0x00c87c6a`
+  and clear it at `0x00c87d0a`.
+- The scene update `0x00a54490` tests it at `0x00a54574` and `0x00a5474c`. When set it skips AI and
+  battle managers, the object phases, the slow-rate cascade and the Havok step. Rendering and the
+  camera tick keep running.
+- In the camera update, only the virtual state update is skipped (`0x00dd1c5e`). `0x00dd03e0` still
+  runs and calls `0x00db8090`.
+- The mod sets the bit on entry and re-asserts it every frame, because scene init rewrites the dword.
+  On exit it restores the saved bit.
+- Zeroing the multiplier alone would produce NaN (`mult / getRate()` sites), so it is not used.
+
+**Input**
+- The pad copy `0x00a1e8a0` calls a disabled hook, `0x00df7c00` (`xor eax,eax; ret`), at
+  `0x00a1e8a7`. When that call returns non-zero, the game zeroes all pads.
+- The call is redirected to a stub that returns 1 while photo mode is on. After exit the stub keeps
+  returning 1 until the buttons are released.
+- The mod reads the controller itself through `XINPUT1_3!XInputGetState`, and the keyboard through
+  `GetAsyncKeyState`.
+
+**Camera**
+- `cCameraApp::UpdateMatrices` `0x00db8090` is the common path for gameplay, cutscene and Blade Mode
+  cameras.
+- At `0x00db8097` it calls the view builder `0x00db7e00`. The mod replaces that call with a stub that
+  writes into the main camera `0x01bea1d0`:
+  - eye `+0x1b0`, target `+0x1c0`, up `+0x1d0` (with our roll);
+  - FOV `+0x94`;
+  - game roll `+0x4f0` = 0.
+
+  The stub then tail-jumps to the original, so view, projection, view-proj and the frustum all match.
+- Conventions: Y-up, right-handed (D3DX LookAtRH / PerspectiveFovRH), metres. Forward =
+  (−sin y·cos p, sin p, −cos y·cos p).
+- The FOV is restored on the first frame after exit. The game rewrites eye, target and up from its
+  own copies each frame.
+
+**HUD**
+- The render-queue executor `0x00f9ae10` runs on the render job. At `0x00f9ae76`
+  (`8B 48 0C 8B 40 08`) a stub skips the phase-1 draw items of UI layers 0x3e, 0x60, 0x61, 0x67 and
+  0x69. Begin and end callbacks still run.
+- World layers, post effects and fades (0x65, 0x68) are untouched.
+
+**Audio** (added after the first photo-mode test)
+- Sound is Wwise; FMV audio goes through CRI Mana and is separate.
+- The pause menu posts the named events `core_se_sys_se_pause` / `_resume` through `0x00e5e050`
+  (`(name, 0)`). These pause the SE, voice and ambience buses.
+- The cutscene pause menu posts `bgm_Paused_Movie_Enter` / `_Exit` through `0x00e5e1b0` (`(name)`),
+  which pauses the music.
+- The mod posts the same pairs on photo-mode entry and exit (`[PhotoMode] PauseAudio`).
+- Sounds that start during photo mode are still heard.
+
+**Untested in game, with known risks**
+- Particles, cloth or animation might keep moving.
+- Fast camera moves may cause motion blur, because the previous view is not reset.
+- Streaming and LOD follow the camera, so areas far from the player may be missing.
+- The sound listener may move with the camera.
+
 ## Next steps
 
 1. In-game test checklist. Every 600 frames, check `hfblade.log` for `mult≈0.5` at 120 fps.
