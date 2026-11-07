@@ -1,0 +1,424 @@
+# MGR:R high-frame-rate research log
+
+Target: *METAL GEAR RISING: REVENGEANCE* (Steam, PC), `METAL GEAR RISING REVENGEANCE.exe`
+
+| Property | Value |
+|---|---|
+| SHA-256 | `7174741f46ab4c222304b0f1b9291a2281d53368016347e65d2ea404ff07ad34` |
+| Format | PE32, x86, image base `0x400000` |
+| Size | 26,347,008 bytes |
+| PDB reference | `PRJ_020.pdb` (not shipped) |
+
+All addresses below are virtual addresses for this exact build. Other builds will differ.
+This document describes behaviour in our own words. It does not reproduce decompiled game code.
+
+Tools: Ghidra 12.1.4 through REA (static analysis only). Nothing below has been confirmed at runtime yet.
+
+Labels used in the tables:
+- **Observed**: read directly from the binary.
+- **Inferred**: a reasonable reading of what was observed, not yet tested at runtime.
+- **Unknown**: still open.
+
+---
+
+## 1. Timer primitives (observed)
+
+| Address | Role |
+|---|---|
+| `0x00df8110` | Timer init. Runs once. Calls `timeBeginPeriod(1)`, stores the QPF frequency and a start QPC, and precomputes a "ms per tick" float at `0x01dd4f14`. |
+| `0x00df81d0` | Returns elapsed time since init as **float milliseconds**. |
+| `0x00df8230` | Returns elapsed time since init as **int64 ticks**. |
+| `0x00df8260` | Returns the "ms per tick" float (`0x01dd4f14`). |
+
+Import addresses (IAT): `Sleep` `0x015fd1bc`, `QueryPerformanceCounter` `0x015fd1b0`,
+`QueryPerformanceFrequency` `0x015fd1ac`, `timeGetTime` `0x015fd2ec`, `timeBeginPeriod` `0x015fd2f0`.
+
+## 2. Frame limiter (observed)
+
+| Address | Role |
+|---|---|
+| `0x00f97f90` | Present wrapper. Calls `IDirect3DDevice9::Present` (vtable +0x44). |
+| `0x00f98000` | Current time in **thirds of a millisecond** (ticks × ms-per-tick × 3, rounded). |
+| `0x00f98070` | **Limiter.** Calls Present, then waits until `now - last >= budget`. While waiting it calls `Sleep((budget - elapsed) / 3)`. Afterwards it stores `last = now`. |
+| `0x01f206ec` | `budget` (uint32, unit: 1/3 ms). |
+| `0x01f206f0` | `last` frame timestamp (same unit). |
+| `0x00f98ad0` | **SetFrameRate(mode)**: if `mode == 1` the target is 1/30 s, otherwise 1/60 s. Sets `budget = round(t × 1000 × 3)`, which is **100** (30 fps) or **50** (60 fps). Also stores `mode` at `0x01f206d0`. |
+| `0x00f9b2b0` | Renderer/device init. Sets the initial budget the same way. Also contains the resolution table and the 1280×720 UI scale. |
+
+Callers of SetFrameRate: `0x00a52510` (main loop, called every frame), plus `0x00d4f6f0`, `0x00d502b0`,
+`0x00d503e0`, `0x00d504f0` (**unknown**; probably cutscene/movie paths that switch to 30 fps).
+
+For 120 fps the limiter budget must be **25** (8.33 ms). Note that the main loop calls SetFrameRate every
+frame, so overwriting `0x01f206ec` once is not enough. Either SetFrameRate itself must be hooked or the
+values it computes from must be changed.
+
+The limiter's `Sleep` granularity is about 1 ms (`timeBeginPeriod(1)`). At 120 fps that leaves a
+noticeable amount of jitter. A replacement limiter should spin-wait for the last ~1 ms.
+
+## 3. Main loop (observed)
+
+`0x00a52510` loops forever. One iteration does the following:
+
+1. Calls `0x00e03970` on the object at `0x01be93b0` (see §4). The first argument is 1 when variable
+   timing is allowed and 0 otherwise. Flags in `0x01bea060` / `0x01bea064` decide which. The second
+   argument is `1.0f`.
+2. Calls `SetFrameRate(mode)`. The mode comes from flags in `0x01bea060`, `0x01bea064` and `0x01bea084`.
+3. Runs game update and render calls (not yet mapped).
+4. Calls `0x00f9d650`, which is the limiter (`0x00f98070`) followed by the next stage.
+
+The game simulation therefore advances **once per loop iteration**.
+
+## 4. Frame multiplier: the key finding (observed + inferred)
+
+The object at `0x01be93b0` has RTTI linking it to `cSlowRateUnit`. Its update function `0x00e03970`
+computes a per-frame **multiplier** stored at `+0x7c`, which is absolute address **`0x01be942c`**:
+
+- It measures the real frame time in ms, averaged over its update count (`+0x84` and `+0x90`).
+- It sets `mult = measured_ms × scale`, where `scale` is the float at `+0x88` (`0x01be9438`). Scale is
+  set at runtime. **Inferred:** it is ≈ 0.06, so that 16.67 ms gives 1.0.
+- It clamps the result. If `mult < 1.0`, then `mult = 1.0`; the 1.0 comes from an inline `FLD1` at
+  `0x00e03a07`. If `mult > 2.0`, then `mult = 2.0`; the 2.0 is read from the constant at `0x0163b740`
+  (bytes `00 00 00 40`).
+- When variable timing is disabled (argument 1 = 0), `mult` is set directly to argument 2, which is `1.0`.
+
+About 185 code locations read `0x01be942c`. In the sample we looked at, the pattern is
+`timer -= mult`, a frame-count timer measured in 60 fps units.
+
+**Inferred consequence.** The engine already supports variable frame times between 30 and 60 fps
+(multiplier 1.0–2.0). Above 60 fps the multiplier is held at 1.0, so the simulation advances one full
+60 fps step per rendered frame. At 120 fps the game runs at **2× speed**.
+
+**Candidate fix.** Lower the minimum clamp from 1.0 to about 0.5 (for 120 fps) and set the limiter
+budget to 25.
+
+**Unknown.**
+- Do systems that do *not* read `mult` (fixed per-frame increments, animation frame stepping, physics
+  substeps, input sampling, scripted timers) behave correctly at multiplier 0.5?
+- Is `+0x88` constant, or does it change with the "slow rate" (Blade Mode / slow-motion)?
+- Are there other places that assume `mult >= 1` (for example integer truncation of `mult`)?
+
+## 5. Other strings (observed)
+
+`DrawFrameRateType` (`0x016cf80c`), `MotionFrameRateType` (`0x016cf82c`) and `ProgressFrameRateType`
+(`0x016cf840`) appear as event/parameter names. They are **not yet traced**, but they may control
+per-scene draw and motion rates. `framerate_n` / `framerate_d` belong to the CRI movie header, which is
+not relevant here.
+
+## 6. Environment notes
+
+The game loads `D3D9.dll` (dgVoodoo → D3D11) and `dxgi.dll` (ReShade) from its folder in the
+author's setup. The mod therefore loads as a `dinput8.dll` proxy (the exe imports `DINPUT8.dll`).
+
+## 7. PoC patches (implemented, `src/dllmain.cpp`)
+
+| Site | Original bytes | Patch |
+|---|---|---|
+| `0x00e03a07` | `D9 E8 D8 56 7C` (`FLD1; FCOM [ESI+0x7C]`) | `JMP` to a stub that runs `FLD [minMult]; FCOM [ESI+0x7C]`, then returns to `0x00e03a0c`. The x87 stack depth and the flags are unchanged. |
+| `0x00f98070` | `55 8B EC 83 E4 F8` (limiter prologue) | `JMP` to a replacement limiter. It calls the Present wrapper `0x00f97f90`, then waits for a QPC deadline at `TargetFPS`, or at 30 fps when mode `0x01f206d0 == 1`. |
+
+SetFrameRate is left alone. Its budget variable is only read by the original limiter, which is now
+bypassed.
+
+Guards: the PE `TimeDateStamp` must be `0x52E76F3A` and the original bytes above must match.
+`0x00f97f90` must also read `A1 <0x01F206D4 + delta>`. Otherwise no patches are applied.
+
+**ASLR:** the exe has `DYNAMIC_BASE` set (DllCharacteristics `0x8140`) and loads at a random base,
+for example `0x005F0000`. All addresses are rebased by `delta = base - 0x400000`, and signatures that
+contain absolute operands are compared after relocation. The first in-game run failed precisely
+because of this. `tests/check_signatures.py` starts the exe **suspended**, so no game code runs, then
+checks the relocated signatures and terminates the process.
+
+Verified offline: the DLL builds as x86 and exports `DirectInput8Create`. In a non-game process the
+call is forwarded to the system DLL (`S_OK`) and the wrong exe is rejected. **Not yet run in-game.**
+
+## 8. First in-game run (2026-11-05, Tunahan)
+
+Observed in `mgr-hfr.log` (now `hfblade.log`):
+- Gameplay runs at a steady `fps=120.0`.
+- `mult` stays between 0.500 and 0.506.
+- `scale` (`0x01be9438`) is exactly `0.06`, which confirms the inference in §4.
+- The 30 fps mode (`mode=1`) appears with **both** multiplier paths: `mult=2.000` on the variable path
+  and `mult=1.000` on the fixed path.
+
+Player report:
+- Gameplay feels much smoother.
+- Menus stayed at 30 fps. This was expected, because the limiter honoured mode 1.
+- **Button-mash QTEs cannot be completed.**
+- **Quickly repeated presses of the same button are not recognised.**
+
+Simple QTEs work.
+
+## 9. Input path (observed)
+
+| Address | Role |
+|---|---|
+| `0x00ddb430` | Per-frame input poll: XInput pads, then keyboard, then mouse. |
+| `0x00ddb350` | Calls `XInputGetState` for 4 pads into `0x01dd05f0` (stride 0x38). A rumble timer at `+0x2c` counts down **one per frame**. |
+| `0x00dda900` | Rumble output (`XInputSetState`). |
+| `0x00dd9670` / `0x00dd9710` | DirectInput keyboard (256-byte state at `0x01dd06f8`) and mouse. |
+| `0x00ddaac0` | Pad device update (vtable `0x00ddafe0`). Computes four masks: hold `[0]`, trigger `[1]` = rising edge, release `[2]`, and repeat `[3]`. The repeat counter `[0xb]` counts **frames** against a delay at `0x01dd05bc` and an interval at `0x01dd05b8`, both set at runtime. |
+
+Edge detection is frame-rate independent, so the press-detection problem must sit in a higher layer.
+**Hypothesis (unverified):** the game logic uses input windows or mash-gauge decay counted in frames
+that ignore the multiplier, so they shrink to half their real-time length at 120 fps. Menu auto-repeat
+also speeds up 2× (frame-counted repeat). The higher input layer is reached only through virtual calls
+and has not been traced yet.
+
+## 10. Patches added after the first run
+
+| Site | Original bytes | Patch |
+|---|---|---|
+| `0x00e039a9` | `DD D8 DD D9 D9 44 24 10` (`FSTP ST0; FSTP ST1; FLD [ESP+0x10]`) | Same instructions plus `FMUL [fixedScale]`, then `JMP 0x00e039b1`. `fixedScale = 30 / MenuFPS`, so the fixed path keeps its per-second rate when the 30 fps mode is unlocked. |
+
+- The limiter now uses `MenuFPS` in mode 1.
+- A hotkey (`ToggleKey`, default F9) switches between HFR and the original 60/30 fps behaviour at
+  runtime. This is the stop-gap for QTEs.
+- On every timing-state change the mod logs the flag words `0x01bea060`, `0x01bea064` and
+  `0x01bea084`. The goal is to tell which state the menus, QTEs and cutscenes use.
+
+Second run (`evidence/run2`):
+- Menus show `mode=1`, `timing=variable` and `f084=02600140` (bit 0x200000 set), running at
+  `fps=120.0` with `mult=0.500`, so the time step is correct.
+- The F9 toggle works.
+
+## 11. 16:10 display (static; offsets verified against the exe)
+
+These findings come from a delegated static pass. I re-checked every patch-site byte against the file.
+
+- Resolution index: field 0 of `Documents\MGR\SaveData\GraphicOption` (read by `0x009c7a20` into
+  `0x01b6efb0`). Indices 0..5 map to 800x600, 1024x768, 1280x720, 1366x768, 1680x1050 and 1920x1080.
+- In fullscreen the backbuffer already matches the desktop size (`GetSystemMetrics` →
+  `0x018ce9ac/b0`). The black bars come from two places:
+  - the internal render target uses the option's size (1920x1080);
+  - the final blit `0x00a3a790` recomputes a 16:9 letterbox itself.
+- The engine camera `0x00de5aa0` (and its constructor `0x00da8390`) loads a hard-coded 16:9 aspect
+  from `0x016c3078`. UI cameras and 2D ortho already use the render width/height. The HUD scale floats
+  `0x018da490/494` are written but never read.
+
+| Site | Original | Patch |
+|---|---|---|
+| `0x016ebf1c` (.rdata) | `00 00 87 44` (1080.0, mode table entry 0 height) | `Height1920` as a float |
+| `0x00a30eb9` | `B8 38 04 00 00` (index 5 height) | `B8 <Height1920>` |
+| `0x016c3078` (.rdata) | `39 8E E3 3F` (16/9) | `1920 / Height1920` |
+| `0x00a3a8ce`, `0x00a3a868` (blit) and `0x00f9b9fc`, `0x00f9b9a9`, `0x00f9d5c6`, `0x00f9d56f` (init/reset) | `2B C7` / `2B C6` (`SUB EAX,reg`, the bar size before `SHR 1`) | `31 C0` (`XOR EAX,EAX`), which gives offset 0 and full size |
+
+Expected result: the vertical FOV stays fixed, so the image is undistorted but slightly narrower
+horizontally than 16:9 (Hor−). Unknowns:
+- FMV / pre-rendered movie aspect (it may stretch);
+- the mouse Y mapping;
+- post-FX tables built from the render size;
+- other projection callers `0x00985e30`, `0x00d1e1e0`, `0x00f43bb0`;
+- windowed mode, which keeps a 1280x720 window, so use fullscreen.
+
+**Width / ultrawide (2026-11-07).**
+- The "1920x1080" slot width comes from two places:
+  - the mode-table float at `0x016ebf20` (1920.0); entries are (w, h, 0) triples built at `0x00f9b5c7`;
+  - `MOV EAX,0x780` at `0x00a30eaa` (index 5).
+- Both are now patched to `[Display] Width`.
+- The UI resolution index `0x01b6efb0` is only rewritten for exact widths 800/1024/1280/1366/1680/1920
+  (`0x009c5330`); other widths keep index 5, so the 3D UI eye distance still assumes H=1080.
+- FOV rule per call site (the return address identifies it):
+  - world cameras: `tan` × (16/9)/aspect only when aspect < 16/9; wider screens are already Hor+;
+  - the two 3D UI calls (`0x00cacb8d`, `0x00cacc2d`): `tan` × H/1080.
+- Not done:
+  - the 2D HUD is still mapped per axis (`x·W/1280`), so it stretches on ultrawide;
+  - FMV aspect is unknown.
+
+**Vert+ FOV (added after the fourth run).** The perspective builder `0x00ddccc0` is cdecl
+`(out, fov, aspect, near, far, 0, 0)`. It computes `cot(fov × 0.5)` (constant `0x01646bc0` = 0.5) as
+the Y scale and divides by the aspect for X, so `fov` is the full **vertical** FOV in radians. With
+aspect 1.6 the horizontal view shrinks (Hor−), which looks like a zoomed-in 16:9 image. The mod
+redirects all 9 calls (`0x00985f6c`, `0x00a28128`, `0x00a460f6`, `0x00cacb8d`, `0x00cacc2d`,
+`0x00d1e43e`, `0x00d1e47c`, `0x00de5b18`, `0x00f43cfb`) to a stub. When the aspect equals the patched
+one, the stub replaces the FOV with `2·atan(tan(fov/2) · (16/9)/aspect)`, then tail-jumps to the
+builder. Other aspects pass through unchanged.
+
+**HUD at 16:10 (static, delegated; fuller notes in `evidence/hud_notes-2026-11-06.md`).**
+Fourth run report: many HUD elements are shifted.
+- UI code maps the virtual 1280x720 space to pixels one axis at a time (`x·W/1280`, `y·H/720`), so the
+  2D layer is stretched 11% vertically at 1200 but stays anchored.
+- The misplacement comes from the 3D UI camera. It is built by `0x00cacbf0` (perspective call
+  `0x00cacc2d`, aspect = W/H). Its eye distance comes from a table at `0x00cad430`, indexed by
+  **width only**. For 1920 the table holds −10.5 = `1080 · 0.005 / tan(fov/2)`, which assumes H=1080,
+  so at H=1200 the layer is magnified 1.11× around the screen centre and edge elements drift outward.
+- The Vert+ hook already covers this call. Widening `tan(fov/2)` by `(16/9)/1.6 = 1200/1080` gives the
+  same visible height as moving the eye to −11.667, so no separate patch is needed (inferred; not yet
+  tested in game).
+- Still open:
+  - elements sized uniformly from the height (`0x00cc42d0`, `0x00cc4300`, and `0x00efd280` when flag
+    0x100000 is clear) are 11% too wide;
+  - a true centred 16:9 HUD band would mean squeezing clip-space Y in the UI projections `0x00cacc90`,
+    `0x00cacbd0` and `0x00cacc70`, plus remapping the scissor and hit tests.
+
+Third run (2026-11-06, player report): 16:10 works. At 120 fps, mash QTEs need about 2× faster
+mashing, but they work after pressing F9 to switch to 60 fps. Blade Mode slows time less at 120 fps.
+The timing state does not change during QTEs or Blade Mode.
+
+## 12. Button-mash QTEs (static, delegated; I verified the bytes)
+
+There is no shared mash routine. Each enemy has its own state code, but they use the same idioms:
+each press adds to a value, and every update removes a fixed amount from it, ignoring the
+multiplier.
+
+- **Speed struggles** (Em0600 / pc60 code, probably EXCELSUS and others):
+  - each press: `[+0x920] += 0.15`, clamped to at most 2.0;
+  - each update: `FSUB [0x0163CCE0]` (0.01), clamped to at least 0.5;
+  - sites `0x005ac120`, `0x005ac5b3`, `0x005aeea5`, `0x00840ac9`, `0x008410fa`.
+  - **Patch:** point the FSUB operand at a mod float `0.01 × mult`. The shared 0.01 constant itself is
+    left unchanged.
+- **EM0130/0131 finish QTE** (`EM013x_FINISHQTE_RENDA`):
+  - the gauge decrements by one per frame at `0x006127b7` (`DEC [ESI+0x948]`);
+  - a 300-frame timeout increments at `0x00612782` (`INC [ESI+0x94C]`);
+  - a variant also increments at `0x00611ba4`.
+  - **Patch:** `CALL` stubs that add or subtract whole 60 Hz ticks, accumulated from the multiplier
+    (0 or 1 per frame at 120 fps).
+- Grab-escape QTEs count presses and have no decay, so they are unaffected.
+- **Ease (fourth run).** With the fix active the player still found mash QTEs harder at 120 fps.
+  `[Fixes] QteEase` (percent, default 80) scales both decays (the float gauges and the `0x948`
+  counter) while HFR is on. Timeouts stay in real time. One possible cause is that some presses are
+  lost when a consumer runs only on 60 Hz ticks; this is unverified.
+- Fifth run: still hard at 80%, and the player did not say which QTE. Observed for EM013x RENDA at
+  `0x00612788`: the press test reads the global pad-0 trigger `0x01b7b914 & 0x40` directly, every
+  update. A press adds `15 − int((g+15)·c)` and skips that frame's decrement. Presses are therefore
+  not frame-gated in that QTE.
+- The input path is polled every frame. Task `0x00a4d130` runs `0x00a1e8a0`, which updates the pads
+  and copies them to `0x01b7b910 + n·0x30`.
+- **Sundowner shield QTE (root cause found).** The player identified the QTE: Raiden jumps on
+  Sundowner and mashes X to pry the shields apart. Em0310 (Sundowner; class found through RTTI, vtable
+  `0x0167a1bc`) runs a tug-of-war at `0x00584c22`:
+  `g = clamp01(g + (pressed ? dt·[esi+0x938] : −dt·[esi+0x93c]))`, where `dt = [esi+0x910]` is the
+  per-frame time step. A press is a single-frame trigger, so at 120 fps each press adds half as much
+  while the decay stays real-time. That is exactly the "mash 2× faster" symptom.
+  - **Patch:** `0x00584c3d` `D8 8E 38 09 00 00` → `fmul [esi+0x938]; fdiv [mult]` (press adds the
+    60 fps amount).
+  - **Patch:** `0x00584c4b` `D8 8E 3C 09 00 00` → `fmul [esi+0x93c]; fmul [ease]`.
+  - A scan for the same idiom (trigger test, then `fmul` by dt and `fadd`) across `.text` found no
+    other gameplay site. The other hits are debug tweak code.
+- The default ease is now 60%. A diagnostic, `LogInput=1`, logs the per-second game trigger count
+  next to rising edges computed from the hold mask, to check whether presses are lost.
+- **Not covered:** mash code that reads input through other paths (Sundowner and Armstrong are
+  unconfirmed). There is also no root cause yet for "rapid repeated presses not recognised".
+
+## 13. Blade Mode / slow motion (static, delegated; I verified the bytes)
+
+- `0x01be93b0` is the slow-rate manager. Its per-frame cascade `0x00e087f0` computes group rates as
+  `mult × slow × base`. The getter is `getRate` `0x00e049b0` (thiscall, no stack args, result in ST0).
+  Blade Mode is driven from `0x00bc27a0` and started by `0x00b85350`, which sets the world target to
+  0.01 or 0.025.
+- **Cause 1** (observed code, inferred effect): 17 sites set an animation speed to `X / getRate()`.
+  The intent is to cancel the world slow-down so a synced animation plays at full speed. Because the
+  rate already contains `mult`, the division cancels the frame-rate scaling too, and these animations
+  run 2× fast at 120 fps.
+  - **Patch:** redirect each `CALL` to a stub that returns `getRate() / mult`. This is identical at
+    60 fps.
+  - Sites: `0x005cc9b8`, `0x005cd009`, …, `0x005cebfd` (15 sites), `0x008ce295` and `0x00ae44c7`.
+- **Cause 2** (observed): the slow-mo ramp `inter += (target − inter) × k` runs once per frame, at
+  `0x00bc285a` (world) and `0x00bc287c` (player).
+  - **Patch:** `k × mult`, a first-order approximation of `1 − (1 − k)^mult`. At 120 fps the ramp is
+    about 8% slower than exact.
+- **Not fixed:** timed per-unit slows and hit-stop count whole frames, so they last half as long at
+  120 fps. These are the counters at `0x00e0896c`, `0x00e061b1` and `0x00c238e0`.
+
+## 14. Persistent debris (static, partly delegated; hook bytes verified by me)
+
+Goal: keep the pieces of the last N cuts instead of letting them explode and vanish.
+Pieces disappear through three paths:
+
+1. **Object debris lifetime.** `BehaviorDebrisBase` update `0x005dda00` (vtable `0x0164393c`, slot
+   0x13). `BehaviorDebrisObject` `0x005dde10` calls it.
+   - Age is a float at `+0x884`, in seconds.
+   - Lifetime L: 3 s for enemy classes, 6 s, or 10/15/30 s depending on the graphics option.
+   - The piece fades for 2 s before L and is deleted at L.
+   - `+0x928 ≠ 0` skips the whole block.
+2. **Enemy-part debris.** `BehaviorDebrisActor` `0x005de4e0`, `BehaviorDebrisEmActor` `0x005ddfb0`
+   and `Em0010DebrisActor` `0x005e6620` have their own update. Age `+0x884` grows; the fade starts
+   at `[+0x8f0]` and the piece is deleted a little later.
+3. **Group explosion.** `DebrisExplodeManager` (`0x01b36a60`) has 12 slots of 0xB0 bytes.
+   - The group id at slot `+0x14` is the piece's `+0x83c`; 0 means no group.
+   - The countdown is checked in `0x00942d90`. When it ends, `0x0093eee0` runs the explosion and
+     `0x0093e740` deletes every piece in the group.
+   - Parameters come from `debrisExplodeParameter.bxm`.
+4. **Reducer.** `DebrisManager` force-fades one piece (`0x005d9560`) when more than 90 exist. Pieces
+   with priority `+0x524 < 0` are skipped.
+
+**Patches** (`[Debris] KeepLastCuts`):
+- A "cut event" is a run of new pieces (age < 0.05 s) that appear within 0.3 s of each other. The mod
+  keeps a ring of the last N events (piece pointers and group ids). Pointers are compared but never
+  dereferenced.
+
+| Site | Original | Patch |
+|---|---|---|
+| `0x005dda84` | `39 9E 28 09 00 00 0F 85 72 03 00 00` | Protected → priority −1 and age `+0x884` := 0, then the original test and the full update. This covers the fade/delete and the explosive-piece timer (`age ≥ [+0x900]`). |
+| `0x005ddfbe`, `0x005de4ee`, `0x005e662e` | `CALL 0x00a8b7f0` | Call it, then hold age `+0x884` at 0 for protected pieces. |
+| `0x00942dca` | `8D 44 24 10 50` | Skip the slot while its group belongs to a protected event. Once the event is released, the group explodes on the next frame. |
+| `0x005d9560` | `56 8B F1 83 BE 80 08 00 00 00` | Return immediately for protected pieces. |
+
+**Not covered:**
+- FastDie pieces (deleted on their first update);
+- explosive pieces from the explosion table (`+0x890`);
+- the chain explosion `0x0093f4e5`;
+- other debris classes (Armor `0x005dab60`, Slider `0x005de340`, ZangekiBonus `0x005de1e0`).
+
+`LogDebris=1` logs events, group ids and releases.
+
+Seventh run: enemies still exploded shortly after landing. The log showed skipped cut ids, releases
+with "0 pieces" and lost log lines. The cause is that the debris updates run on several game worker
+threads at the same time and raced on the unprotected ring.
+- **Fix:** an SRW lock around all ring access, plus a lock in `Log()`.
+- Group ids are now re-read on every frame, because a piece may join its group after its first
+  update.
+- `LogDebris` logs each new thread that updates debris.
+
+Eighth run: bodies stay, but some pieces hung in the air. The first version jumped to the epilogue, which skipped the rest of the update, physics and transform included, so pieces froze where they spawned. Fix: hold the age at 0 and let the update run.
+
+Performance note (sixth run, from the log): at `TargetFPS=165` the game held 105–161 fps, so 165 is
+not stable natively on this machine. The multiplier tracked the real frame time correctly.
+
+## 15. Persistent enemy bodies (static, delegated; call sites verified by me)
+
+Fuller notes are in `evidence/corpse_notes-2026-11-06.md`.
+
+- All Em*/Et* classes derive from `BehaviorEmBase` (vtable `0x0163fa54`).
+- There is no shared corpse timer. Each type has death states and its own **vanish** function, which
+  plays the explosion or vanish effect and sound, cleans up debris and hides the body. The object is
+  deleted (`0x009fdde0`) 180 frames later.
+- **Em0010** (cyborg soldier):
+  - death states `0xb0000` (`0x00b3f320`), `0xb0001`, `0xb0002` (fallback, `0x00b3f940`) and
+    `0xc0003` (`0x00b359e0`);
+  - vanish `0x00b346d0` (thiscall(int), `RET 4`).
+- **Em0030:** vanish `0x00b67710` (thiscall, `RET`), called when the death animation ends.
+- `EmSet` (`0x01c78cb0`) does not count bodies with `+0x6BC ≠ 0`, so waves and enemy-count triggers
+  keep working.
+- `EnemyManager` caps live enemies at 128.
+
+**Patch** (`[Debris] KeepCorpses`, default 3, up to 8):
+- The 7 vanish call sites (`0x00b3f668`, `0x00b3f8c7`, `0x00b3f9b8`, `0x00b35aba`, `0x00b6d1ef`,
+  `0x00b6d3ee`, `0x00b6dba6`) call stubs instead.
+- For the last N bodies a stub:
+  - skips vanish;
+  - rewinds the death step `+0x61C` so the same code calls it again next frame (step := 2 or 0, or
+    undo the following `INC` / `ADD EBX`);
+  - sets `+0x6BC = 1`.
+- When a body is pushed out of the ring, its next call goes through, so it explodes and is deleted
+  as usual.
+- Skipped bodies: special deaths (`Em0010 +0xDD4 & 0x100`) and instant vanishes (`Em0030 +0xA50 == 0`).
+- The ring is locked, and pointers are only compared.
+
+**Not covered yet:**
+- other enemy types (Em0060/0070/0080/0100/0120/0190/0221, the DLC clones), which have their own
+  vanish functions;
+- kill-volume removal (`0x00b35560`).
+
+## Next steps
+
+1. In-game test checklist. Every 600 frames, check `hfblade.log` for `mult≈0.5` at 120 fps.
+   - [ ] Walking/running speed versus 60 fps (stopwatch over a fixed distance)
+   - [ ] Combat timing, parry window, enemy attack speed
+   - [ ] Blade Mode (slow-motion interaction with `cSlowRateUnit`)
+   - [ ] QTEs, scripted timers, boss phases
+   - [ ] Real-time and pre-rendered cutscenes (30 fps mode)
+   - [ ] Physics debris, cloth, particles
+   - [ ] UI/menu animations, audio/lip sync
+2. If any of these are wrong, find code that steps per frame without reading `0x01be942c`.
+3. Trace the consumers of the three `*FrameRateType` parameters.
+4. Fix float time precision: rebase `0x00df81d0`, or hook `0x00e03970` and measure with a double QPC.

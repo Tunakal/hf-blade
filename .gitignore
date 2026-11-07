@@ -1,0 +1,27 @@
+# Local analysis artifacts may contain decompiled game code: never commit
+evidence/
+*.rea-snapshot*
+*.gzf
+
+# Game binaries / dumps
+*.exe
+*.dmp
+*.pdb
+
+# Build output
+build/
+out/
+.vs/
+*.obj
+*.ilk
+*.dll
+*.lib
+*.exp
+
+# Optional launcher key art is user-supplied (copyrighted game art is not distributed)
+hfblade-launcher-art.*
+mgr-hfr-launcher-art.*
+intro_*.png
+
+# Launcher sound effects are user-supplied (third-party files; check their license before committing)
+hfblade-sounds/
