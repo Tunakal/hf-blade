@@ -316,6 +316,24 @@ multiplier.
   `0x00bc285a` (world) and `0x00bc287c` (player).
   - **Patch:** `k × mult`, a first-order approximation of `1 − (1 − k)^mult`. At 120 fps the ramp is
     about 8% slower than exact.
+- **Cause 3** (observed; reported in game on 2026-11-07 as "the energy bar empties too fast in Blade
+  Mode"): the energy drain.
+  - Every Blade Mode state calls `0x00bf24f0` once per frame. It checks the `GAME_` flags at
+    `0x01bea090`:
+    - bit `0x80000000` is the single-bar mode;
+    - bit `0x2` is `GAME_MUGEN_ZANGEKI` (id 30, mask `0x80000000 >> id`; flag getter `0x00416d50`).
+  - It then subtracts `vfunc[0x3B0]() × [player+0x338C]` from the fuel cells with
+    `SubEnergy` `0x00bc3000`. The cells are 24-byte entries at `[player+0x3820]`: value `+4`, max
+    `+0xC`.
+  - There is no time step, so the bar drains twice as fast at 120 fps. By contrast, the Ripper Mode
+    drain at `0x00c10513` already multiplies by the player's step `[+0x910]`.
+  - The DLC characters use the same code at `0x00877147` and `0x008b8457`.
+  - **Patch:** at all three sites, the `FMUL dword [ESI+0x338C]` (`D8 8E 8C 33 00 00`) becomes a
+    `CALL` to a stub that also multiplies by `min(mult, 1)`.
+- Also seen, not patched: the Blade Mode cut-angle smoothing `0x00be2b54`.
+  - It eases the plane angle `[player+0x3F8]` toward the stick angle by k = (stick magnitude)² per
+    frame (`0x00bb5fa0`).
+  - At full tilt it snaps, so only partial tilts react faster at 120 fps.
 - **Not fixed:** timed per-unit slows and hit-stop count whole frames, so they last half as long at
   120 fps. These are the counters at `0x00e0896c`, `0x00e061b1` and `0x00c238e0`.
 

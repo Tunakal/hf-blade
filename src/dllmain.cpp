@@ -80,6 +80,11 @@ static const uintptr_t VA_RATE_DIV_CALLS[] = {
 static const uintptr_t VA_LERP_WORLD = 0x00BC285A, VA_LERP_WORLD_RESUME = 0x00BC2860;
 static const uintptr_t VA_LERP_PLAYER = 0x00BC287C, VA_LERP_PLAYER_RESUME = 0x00BC2882;
 static const uint8_t   kLerpOrig[] = { 0xD8, 0x8E, 0x30, 0x34, 0x00, 0x00 };
+// Blade Mode energy drain: every Blade Mode frame the player subtracts "coef() * [ESI+0x338C]" from the
+// fuel cells (0xbc3000) without any time step, so the energy bar empties twice as fast at 120 fps.
+// Raiden 0xbf256e, plus the same code for the two DLC characters (Sam, Blade Wolf).
+static const uintptr_t VA_BLADE_DRAIN[] = { 0x00BF256E, 0x00877147, 0x008B8457 }; // FMUL dword [ESI+0x338C]
+static const uint8_t   kBladeDrainOrig[] = { 0xD8, 0x8E, 0x8C, 0x33, 0x00, 0x00 };
 
 static const uint8_t kLimiterOrig[] = { 0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF8 };
 static const uint8_t kClampOrig[]   = { 0xD9, 0xE8, 0xD8, 0x56, 0x7C };
@@ -175,6 +180,25 @@ extern "C" __declspec(naked) void LerpPlayerHook()
         fmul  dword ptr [eax]
         pop   eax
         jmp   dword ptr [g_lerpPlayerResume]
+    }
+}
+
+// Replaces "FMUL dword [ESI+0x338C]" (CALL + NOP). Scales the per-frame drain by min(mult, 1):
+// unchanged at 60 fps and below, real-time above 60 fps.
+extern "C" __declspec(naked) void BladeDrainHook()
+{
+    __asm {
+        fmul    dword ptr [esi + 0x338C]
+        push    eax
+        mov     eax, dword ptr [g_multPtr]
+        fld     dword ptr [eax]         // st0 = mult, st1 = drain
+        fld1                            // st0 = 1, st1 = mult
+        fcomi   st, st(1)
+        fcmovnb st, st(1)               // 1 >= mult -> use mult
+        fstp    st(1)                   // st0 = min(mult, 1), st1 = drain
+        fmulp   st(1), st
+        pop     eax
+        ret
     }
 }
 
@@ -660,6 +684,14 @@ static void InstallBlade(const char* ini)
     WriteJmp(VA_LERP_WORLD, &LerpWorldHook, sizeof kLerpOrig);
     WriteJmp(VA_LERP_PLAYER, &LerpPlayerHook, sizeof kLerpOrig);
     Log("Blade Mode fix applied: %u rate-division sites, 2 slow-mo ramps.", (unsigned)_countof(VA_RATE_DIV_CALLS));
+
+    unsigned drains = 0;
+    for (uintptr_t va : VA_BLADE_DRAIN)
+        if (Matches("BladeDrain", va, kBladeDrainOrig, sizeof kBladeDrainOrig)) {
+            WriteCall(va, &BladeDrainHook, sizeof kBladeDrainOrig);
+            ++drains;
+        }
+    Log("Blade Mode energy drain: %u of %u sites scaled to real time.", drains, (unsigned)_countof(VA_BLADE_DRAIN));
 }
 
 // ---------------------------------------------------------------------------

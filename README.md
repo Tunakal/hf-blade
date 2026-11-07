@@ -38,6 +38,10 @@ The mod is a `dinput8.dll` proxy. It loads alongside dgVoodoo and ReShade withou
    - On 16:10 the 2D HUD is stretched about 11% vertically.
    - On ultrawide the 2D HUD is stretched horizontally. A centred 16:9 HUD is planned.
    - Ultrawide is untested in game.
+4. **Persistent debris and bodies.** The pieces of your last cuts and the bodies of the last killed
+   enemies stay on the ground instead of exploding and vanishing.
+5. **Photo mode (F10).** Freezes the game, hides the HUD and gives you a free camera. See
+   [Photo mode](#photo-mode) below.
 
 The mod checks the exe's PE timestamp and the bytes at each patch site before changing anything. If
 any check fails it applies no patches and writes the reason to `hfblade.log`. Patches live only in
@@ -80,23 +84,47 @@ automatically on first start.
   "Kill all enemies" objectives complete as soon as the last enemy is dead, even if bodies or pieces
   are still lying around. The target of a zandatsu (spine grab) still disappears as in the original
   game.
-- **Photo mode** (`[PhotoMode]`, **F10**): freezes the world, hides the HUD and gives you a free
-  camera with FOV and roll. Use a controller or keyboard + mouse; the launcher's Photo Mode tab
-  lists the controls. Take the picture with PrtSc (ReShade) or F12 (Steam), then press F10 again to
-  resume where you stopped. Game sounds and music pause while it is on (`PauseAudio`).
+- **Photo mode** (`[PhotoMode]`): see [Photo mode](#photo-mode).
 - Any other `TargetFPS` from 60 to 240 can be set in the ini. The launcher shows it as "Custom".
 
 To actually reach 120 fps you need a 120 Hz+ display, or V-Sync turned off (for example in dgVoodoo).
 With `LogStats=1`, `hfblade.log` reports fps and the multiplier every 600 frames. At 120 fps the
 multiplier should be about 0.5.
 
+## Photo mode
+
+Press **F10** during gameplay. The game freezes where it is (enemies, effects and flying pieces
+included), game sounds and music pause, and the camera comes loose. Take the picture with **F12**
+(Steam) or **PrtSc** (ReShade, if installed), then press **F10** again to continue exactly where
+you stopped.
+
+| Action | Controller | Keyboard + mouse |
+| --- | --- | --- |
+| Move | Left stick | W A S D |
+| Up / down | RT / LT | Space / Ctrl |
+| Look | Right stick | Mouse or arrow keys |
+| Roll | LB / RB | Q / E |
+| Zoom (FOV) | D-pad up / down | Z / X or Page Up / Page Down |
+| Faster / slower | L3 (faster) | Shift (faster) / Alt (slower) |
+| Reset roll and FOV | Y | R |
+| Show / hide HUD | X | H |
+| Exit | F10 | F10 |
+
+Settings in `hfblade.ini` under `[PhotoMode]`:
+- `Enabled`;
+- `Key` (virtual-key code, default 121 = F10);
+- `SpeedCmPerSec` (camera speed, default 400);
+- `PauseAudio` (default 1).
+
+The launcher's Photo Mode tab shows the same controls.
+
 ## Known issues / open questions
 
 - **Antivirus:** some antivirus products quarantine the `dinput8.dll` proxy as a heuristic false
   positive, because it loads into the game and patches its memory. Kaspersky has been seen doing this.
   Build it from source if you prefer, and add an exclusion for the game folder.
-- Button-mash QTEs and Blade Mode slow motion are scaled to real time (`[Fixes]`). This includes
-  Sundowner's shield QTE. `QteEase` (default 60%) also makes mash gauges drain slower at high fps.
+- Button-mash QTEs, Blade Mode slow motion and the Blade Mode energy drain are scaled to real time
+  (`[Fixes]`). This includes Sundowner's shield QTE. `QteEase` (default 60%) also makes mash gauges drain slower at high fps.
   If a QTE still fails, press **F9** to switch to the original 60 fps, then press F9 again to switch
   back.
 - Timed hit-stop and short slow-motion effects still last half as long at 120 fps.
