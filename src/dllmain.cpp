@@ -562,9 +562,54 @@ static void PollPreset()
 }
 
 static void PhotoTick(float dt);   // photomode.inl
+static void WeaponSwitchTick();    // weaponswitch.inl
+
+// Title screen ("press start"): its alpha movie (movie_ui/Title_Alpha.usm, Raiden's eye glow) only plays
+// correctly at the original frame rate. cTitleStart's update (vtable slot 5) marks the frame unless its
+// state [+0x38] is 5 (main menu; 3 = "press start", 4/6 = fades); while marked, the limiter runs at
+// TitleFPS (default 30, as in the original game).
+static const uintptr_t VA_TITLE_START_UPDATE_SLOT = 0x01656CA0;   // cTitleStart vtable +0x14
+static const uintptr_t VA_TITLE_START_UPDATE      = 0x009A7220;
+extern "C" {
+    uint32_t          g_frameNo = 0;
+    volatile uint32_t g_titleFrame = 0x80000000u;
+    uintptr_t         g_titleOrig = 0;
+}
+static int g_titleFps = 30;
+
+extern "C" __declspec(naked) void TitleStartHook()
+{
+    __asm {
+        cmp   dword ptr [ecx + 0x38], 5       // state 5 = main menu: keep MenuFPS there
+        je    orig
+        mov   eax, dword ptr [g_frameNo]
+        mov   dword ptr [g_titleFrame], eax
+    orig:
+        jmp   dword ptr [g_titleOrig]
+    }
+}
+
+static void InstallTitleFps(const char* ini)
+{
+    g_titleFps = GetPrivateProfileIntA("General", "TitleFPS", 0, ini);
+    if (g_titleFps <= 0) { Log("Title screen: TitleFPS=0, title runs at MenuFPS."); return; }
+    if (g_titleFps < 30) g_titleFps = 30;
+    if (g_titleFps > cfg::kMaxFps) g_titleFps = cfg::kMaxFps;
+    uint32_t* slot = At<uint32_t>(VA_TITLE_START_UPDATE_SLOT);
+    if (*slot != uint32_t(VA_TITLE_START_UPDATE + g_delta)) {
+        Log("Title screen: cTitleStart vtable slot mismatch (0x%08X), TitleFPS not applied.", *slot);
+        g_titleFps = 0;
+        return;
+    }
+    g_titleOrig = VA_TITLE_START_UPDATE + g_delta;
+    const uint32_t hook = uint32_t(reinterpret_cast<uintptr_t>(&TitleStartHook));
+    WriteBytes(VA_TITLE_START_UPDATE_SLOT, &hook, sizeof hook);
+    Log("Title screen: runs at %d fps (TitleFPS).", g_titleFps);
+}
 
 extern "C" void __cdecl LimiterHook()
 {
+    ++g_frameNo;
     g_present();
     PollToggle();
     PollPreset();
@@ -575,11 +620,23 @@ extern "C" void __cdecl LimiterHook()
         last = now;
         PhotoTick(dt);
     }
+    WeaponSwitchTick();
     TraceState();
     TraceInput();
     UpdateFrameScalars();
     const bool mode30 = *At<int>(VA_RATE_MODE) == 1;
-    const int fps = g_hfrOn ? (mode30 ? g_menuFps : g_targetFps) : (mode30 ? 30 : 60);
+    int fps = g_hfrOn ? (mode30 ? g_menuFps : g_targetFps) : (mode30 ? 30 : 60);
+    {   // title screen at TitleFPS; the fixed (30 fps) path is rescaled to match while it is up
+        static bool wasTitle = false;
+        const bool title = g_hfrOn && g_titleFps > 0 && (g_frameNo - g_titleFrame) < 4;
+        if (title) fps = mode30 ? g_titleFps : (g_titleFps < 60 ? 60 : g_titleFps);
+        if (title != wasTitle) {
+            if (title) g_fixedScale = 30.0f / float(mode30 ? g_titleFps : g_menuFps);
+            else ApplyMode();
+            Log("Title screen %s (%d fps).", title ? "entered" : "left", fps);
+            wasTitle = title;
+        }
+    }
     Pace(fps);
     Stats();
 }
@@ -692,6 +749,164 @@ static void InstallBlade(const char* ini)
             ++drains;
         }
     Log("Blade Mode energy drain: %u of %u sites scaled to real time.", drains, (unsigned)_countof(VA_BLADE_DRAIN));
+}
+
+// ---------------------------------------------------------------------------
+// Effect timing. See docs/RESEARCH.md section 17.
+// The effect system (EspListThread) updates every effect once per frame. Most effect code scales by
+// the per-effect time step that 0xedfc20 writes into the update context (+0x1C rate, +0x24 mult),
+// but some particle types count update calls, so above 60 fps they die early: blood on the floor
+// lasted 1-2 s at 120 fps instead of several seconds. Fix: above 60 fps the effect updates run at
+// most once per 60 Hz tick, with the time step of all the frames since the last update.
+// ---------------------------------------------------------------------------
+static const uintptr_t VA_ESP_KICK = 0x00F43A20, VA_ESP_KICK_RESUME = 0x00F43A26;  // EspListThread per-frame start
+static const uint8_t   kEspKickOrig[] = { 0x83, 0xEC, 0x0C, 0x53, 0x33, 0xDB };  // SUB ESP,0xC; PUSH EBX; XOR EBX,EBX
+// Per-effect update dispatch "MOV r,[vtable+8]; MOV ECX,ESI; CALL r" (3 job loops).
+static const uintptr_t VA_ESP_CALL_A = 0x00F41412, VA_ESP_CALL_B = 0x00F41470, VA_ESP_CALL_C = 0x00F41513;
+static const uint8_t   kEspCallEdxOrig[] = { 0x8B, 0x42, 0x08, 0x8B, 0xCE };  // MOV EAX,[EDX+8]; MOV ECX,ESI
+static const uint8_t   kEspCallEaxOrig[] = { 0x8B, 0x50, 0x08, 0x8B, 0xCE };  // MOV EDX,[EAX+8]; MOV ECX,ESI
+// End of the step-context fill: FSTP [ESI+0x24]; MOV ECX,[EDI+0x84]
+static const uintptr_t VA_ESP_CTX = 0x00EDFCA5, VA_ESP_CTX_RESUME = 0x00EDFCAE;
+static const uint8_t   kEspCtxOrig[] = { 0xD9, 0x5E, 0x24, 0x8B, 0x8F, 0x84, 0x00, 0x00, 0x00 };
+
+extern "C" {
+    volatile LONG g_espSkip = 0;      // 1 = skip effect updates this frame
+    float     g_espFactor = 1.0f;     // time-step multiplier on update frames
+    uintptr_t g_espKickResume = 0, g_espResA = 0, g_espResB = 0, g_espResC = 0, g_espCtxResume = 0;
+}
+static float g_espAcc = 0.0f;
+
+// Main thread, once per frame, before the effect jobs start.
+extern "C" void __cdecl EspFrameTick()
+{
+    const float m = *reinterpret_cast<const float*>(g_multPtr);
+    // Only in gameplay. In the 30 fps mode (menus, title screen) leave every effect update alone:
+    // skipping there broke the title screen's eye glow.
+    if (!(m > 0.0f) || *At<int>(VA_RATE_MODE) == 1) { g_espSkip = 0; g_espFactor = 1.0f; g_espAcc = 0.0f; return; }
+    g_espAcc += m;
+    if (m >= 0.95f || g_espAcc >= 0.999f) {
+        g_espFactor = g_espAcc / m;
+        if (g_espFactor > 4.0f) g_espFactor = 4.0f;
+        g_espAcc = 0.0f;
+        g_espSkip = 0;
+    } else {
+        g_espFactor = 1.0f;
+        g_espSkip = 1;
+    }
+}
+
+extern "C" __declspec(naked) void EspNoop() { __asm { ret } }
+
+extern "C" __declspec(naked) void EspKickHook()
+{
+    __asm {
+        pushad
+        pushfd
+        call  EspFrameTick
+        popfd
+        popad
+        sub   esp, 0x0C
+        push  ebx
+        xor   ebx, ebx
+        jmp   dword ptr [g_espKickResume]
+    }
+}
+
+extern "C" __declspec(naked) void EspCallHookA()   // vtable in EDX, target in EAX
+{
+    __asm {
+        cmp   dword ptr [g_espSkip], 0
+        je    run
+        test  byte ptr [esi + 0x6C], 0x10   // timeline-driven effect: never skip
+        jz    skip
+    run:
+        mov   eax, dword ptr [edx + 8]
+        mov   ecx, esi
+        jmp   dword ptr [g_espResA]
+    skip:
+        mov   eax, offset EspNoop
+        mov   ecx, esi
+        jmp   dword ptr [g_espResA]
+    }
+}
+
+extern "C" __declspec(naked) void EspCallHookB()
+{
+    __asm {
+        cmp   dword ptr [g_espSkip], 0
+        je    run
+        test  byte ptr [esi + 0x6C], 0x10   // timeline-driven effect: never skip
+        jz    skip
+    run:
+        mov   eax, dword ptr [edx + 8]
+        mov   ecx, esi
+        jmp   dword ptr [g_espResB]
+    skip:
+        mov   eax, offset EspNoop
+        mov   ecx, esi
+        jmp   dword ptr [g_espResB]
+    }
+}
+
+extern "C" __declspec(naked) void EspCallHookC()   // vtable in EAX, target in EDX
+{
+    __asm {
+        cmp   dword ptr [g_espSkip], 0
+        je    run
+        test  byte ptr [esi + 0x6C], 0x10   // timeline-driven effect: never skip
+        jz    skip
+    run:
+        mov   edx, dword ptr [eax + 8]
+        mov   ecx, esi
+        jmp   dword ptr [g_espResC]
+    skip:
+        mov   edx, offset EspNoop
+        mov   ecx, esi
+        jmp   dword ptr [g_espResC]
+    }
+}
+
+extern "C" __declspec(naked) void EspCtxHook()     // ST0 = frame mult for ctx+0x24; ESI = ctx, EDI = effect
+{
+    __asm {
+        test  byte ptr [edi + 0x6C], 0x10   // timeline-driven effect: leave its step alone
+        jnz   plain
+        fmul  dword ptr [g_espFactor]
+        fstp  dword ptr [esi + 0x24]
+        fld   dword ptr [esi + 0x1C]
+        fmul  dword ptr [g_espFactor]
+        fstp  dword ptr [esi + 0x1C]
+        mov   ecx, dword ptr [edi + 0x84]
+        jmp   dword ptr [g_espCtxResume]
+    plain:
+        fstp  dword ptr [esi + 0x24]
+        mov   ecx, dword ptr [edi + 0x84]
+        jmp   dword ptr [g_espCtxResume]
+    }
+}
+
+static void InstallEffects(const char* ini)
+{
+    if (!GetPrivateProfileIntA("Fixes", "EffectTimingFix", 1, ini)) { Log("Effect timing fix disabled (EffectTimingFix=0)."); return; }
+    bool ok = Matches("EspKick", VA_ESP_KICK, kEspKickOrig, sizeof kEspKickOrig);
+    ok &= Matches("EspCallA", VA_ESP_CALL_A, kEspCallEdxOrig, sizeof kEspCallEdxOrig);
+    ok &= Matches("EspCallB", VA_ESP_CALL_B, kEspCallEdxOrig, sizeof kEspCallEdxOrig);
+    ok &= Matches("EspCallC", VA_ESP_CALL_C, kEspCallEaxOrig, sizeof kEspCallEaxOrig);
+    ok &= Matches("EspCtx", VA_ESP_CTX, kEspCtxOrig, sizeof kEspCtxOrig);
+    if (!ok) { Log("Effect timing fix: signatures do not match. Not applied."); return; }
+    g_multPtr = VA_FRAME_MULT + g_delta;
+    g_espKickResume = VA_ESP_KICK_RESUME + g_delta;
+    g_espResA = VA_ESP_CALL_A + 5 + g_delta;
+    g_espResB = VA_ESP_CALL_B + 5 + g_delta;
+    g_espResC = VA_ESP_CALL_C + 5 + g_delta;
+    g_espCtxResume = VA_ESP_CTX_RESUME + g_delta;
+    // Order: the context hook first (harmless at factor 1), the skips, then the tick that drives them.
+    WriteJmp(VA_ESP_CTX, &EspCtxHook, sizeof kEspCtxOrig);
+    WriteJmp(VA_ESP_CALL_A, &EspCallHookA, sizeof kEspCallEdxOrig);
+    WriteJmp(VA_ESP_CALL_B, &EspCallHookB, sizeof kEspCallEdxOrig);
+    WriteJmp(VA_ESP_CALL_C, &EspCallHookC, sizeof kEspCallEaxOrig);
+    WriteJmp(VA_ESP_KICK, &EspKickHook, sizeof kEspKickOrig);
+    Log("Effect timing fix applied: effects update at <= 60 Hz with the accumulated time step.");
 }
 
 // ---------------------------------------------------------------------------
@@ -1290,6 +1505,7 @@ static void InstallCorpses(const char* ini)
 }
 
 #include "photomode.inl"
+#include "weaponswitch.inl"
 
 static void Install()
 {
@@ -1317,6 +1533,7 @@ static void Install()
     InstallDebris(ini);
     InstallCorpses(ini);
     InstallPhotoMode(ini);
+    InstallWeaponSwitch(ini);
 
     bool ok = Matches("Limiter", VA_LIMITER, kLimiterOrig, sizeof kLimiterOrig);
     ok &= Matches("Clamp", VA_CLAMP_SITE, kClampOrig, sizeof kClampOrig);
@@ -1353,6 +1570,8 @@ static void Install()
     // Depends on LimiterHook updating g_qteDecay / g_ticks60 every frame.
     InstallQte(ini);
     InstallBlade(ini);
+    InstallEffects(ini);
+    InstallTitleFps(ini);
 }
 
 // ---------------------------------------------------------------------------

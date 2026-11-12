@@ -515,6 +515,143 @@ Fuller notes are in `evidence/photo_*.md`.
 - Streaming and LOD follow the camera, so areas far from the player may be missing.
 - The sound listener may move with the camera.
 
+## 17. Effect timing above 60 fps (runtime with Frida, then static)
+
+Reported in game on 2026-11-07: blood on the floor stayed 1-2 s at 120 fps and visibly longer at
+60 fps (F9).
+
+**Structure**
+- `EspListThread` (vtable `0x016dfcc8`) is kicked once per frame. The kick is `0x00f43a20`.
+- Worker jobs (`0x00f41310`, `0x00f41490`) call each live effect's `vfunc[2]` (update) once. The three
+  dispatch sites are `MOV r,[vtable+8]; MOV ECX,ESI; CALL r` at `0x00f41412`, `0x00f41470` and
+  `0x00f41513`.
+- `0x00edfc20` fills each effect's update context:
+  - `+0x1C` rate: `getRate` of the effect's slow unit, which includes the frame multiplier;
+  - `+0x20` local speed;
+  - `+0x24` frame multiplier: `[0x01be93b0+0x7C]`, or 1.0 for flag `0x10` effects.
+
+**Measurements** (Frida)
+- The context rate equals the frame multiplier for every effect seen, about 0.5 at 120 fps.
+- Effect times such as `+0x118` advance correctly.
+- Lifetime per effect type at 120 vs 60 fps: most types are equal. A few live 1.4-3x longer at
+  60 fps. Their particles count update calls instead of using the context step.
+- The effect data blocks carry no names, so the blood type could not be singled out.
+
+**Fix (verified in game with a Frida prototype, then moved into the DLL)**
+- Above 60 fps, effects update at most once per 60 Hz tick, with the time step of all frames since
+  the last update.
+- At the kick: `acc += mult`.
+  - When `acc >= 1` (or `mult >= 0.95`), effects update with `factor = acc / mult`, and the context's
+    `+0x1C` and `+0x24` are multiplied by `factor` (hook at `0x00edfca5`).
+  - Otherwise the three dispatch sites call a `RET` stub instead of the update.
+- At 60 fps and below it changes nothing. Effects then animate at 60 Hz while everything else runs at
+  120 fps. This was not visible in the test.
+- `[Fixes] EffectTimingFix`.
+
+## 18. Title screen eye glow (runtime A/B, then static)
+
+Reported 2026-11-07: Raiden's eye glow on the title screen was missing.
+- It is not an Esp effect: no effect goes through `0x00edfc20` on the title screen, and undoing the
+  effect timing patch live changed nothing.
+- It came back with F9 (original timing; the title runs in the game's 30 fps mode).
+
+**Structure**
+- The title screen is `cTitleStart` (vtable `0x01656c8c`). Its init `0x009b6670` plays the alpha movie
+  `movie_ui/Title_Alpha.usm`.
+- The update is slot 5 (`0x009a7220`). It switches on state `[+0x38]`:
+  - 1-2: load and init;
+  - 3: "press start";
+  - 4: fade-out after start;
+  - 5: main menu;
+  - 6: fade back in.
+- The fades step a constant per frame (`0x0163d8f8`).
+
+**Fix**
+- The vtable slot is redirected to a stub that marks the frame when the state is not 5.
+- While a mark is recent, the limiter paces at `TitleFPS` (default 30), and the fixed-path scale is
+  set to `30 / TitleFPS`.
+- The main menu stays at MenuFPS.
+- The exact reason the movie fails at high fps (CRI Mana timing) was not investigated.
+
+**Correction (2026-11-12):** Tunahan pointed out that the published build ran the title screen at
+165 fps with the eye glow intact, so the cause was the effect timing patch (§17), not the frame rate.
+The A/B tests above were misleading:
+- the glow is probably created once when the title opens, so undoing the patch live could not bring
+  it back;
+- F9 also changes the effect patch's behaviour.
+
+The title runs in the game's 30 fps mode. Effect decimation is now skipped entirely in that mode, and
+`TitleFPS` defaults to 0 (off). The 30 fps title cap stays available as an option.
+
+**Open: blood that stays on the floor**
+- The effect timing fix (§17) restores the original duration, but the request is for blood that never
+  fades.
+- The blood effect type has not been identified yet. A wall-clock capture failed because the game
+  pauses when unfocused.
+- Next: a game-time capture tied to cut events (debris actor creation `0x00a8b7f0`). Then the plan is
+  to stop updating settled blood effects, keeping the last N; an effect that is not updated stays
+  drawn as is, which the §17 test showed.
+
+## 19. Quick boss-weapon switch (static + in-game slot watch)
+
+The in-game weapon menu (`cWeaponSelectMenu`, vtable `0x01656654`) applies each slot in `0x00992ab0`.
+Two slots were tried first and turned out wrong in game:
+- `0x01be9fe8`: sub-weapons;
+- `0x01be9ffc`: another customize slot.
+
+A temporary log of every change in `0x01be9fb8..0x01bea060`, recorded while Tunahan changed the boss
+weapon in the menu, identified the right slot.
+
+**Boss weapon slot**
+- `0x01be9fd4`: equipped kind;
+- `0x01be9fd8`: requested (bit 31 in game states 8 and 9);
+- `0x01be9fdc`: loading flag.
+
+**Request** (menu `0x00992ca7`), when `kind != [fd4]`:
+1. `player->0x00b7d0e0()`;
+2. `[fd8] = kind`;
+3. `player->0x00b7f5e0(kind)`;
+4. `[0x01dc074c] = 1`.
+
+**Finish** (menu `0x00992d6b`)
+- When `[fdc] == 0 && player->0x00b7d0c0() == 0`, player vtable `+0x3D8` attaches the weapon.
+
+**Ownership** (menu `0x009933df`)
+- Table `0x016566a4`: 3 entries `{item, value}`, items `0x18`, `0x17` and `0x16`.
+- Owned if `0x009c4900(item)` returns nonzero, which means the status byte
+  `[0x01b73860 + item*32] == 3`.
+- Value → kind: `0→2, 1→3, 2→4`.
+
+**Crash mid-attack** (seen in game): swapping while a boss-weapon attack animation still uses the
+weapon crashes the game. The menu never hits this because it pauses the game. The switch is now queued
+until no attack button (pad X/Y/B, mouse buttons) has been held for `QuietMs` (default 1000 ms);
+after 8 s without such a moment it is dropped. The input wait alone still crashed: Raiden keeps using the weapon after the button is released.
+A Frida probe sampled the player at 30 Hz with the pad's Y button. `[player+0x11A4]` was 0 in every
+idle sample and 1 in 99% of the samples within 1 s of Y, and attack code sets it (`0xb99xxx`). The
+switch first waited for that flag to be clear for 15 frames, but it still crashed right after an
+attack (idle swaps worked). The weapon stays out after the attack flag clears. The probe's second
+field, `[player+0x2658]`, is 1 when idle and 0 from the attack until the weapon is put away. The
+switch now waits until `0x11A4 == 0` and `0x2658 != 0` have both held for `SettleMs`.
+- That still crashed. Windows' crash record gives the same address every time: `0x00e23924`,
+  in `0x00e23900`, which searches a motion's 12-byte frame/event table (terminator `0x7fff`, 17
+  callers in the motion system).
+- Inferred: each boss weapon loads its own set of Raiden's motions. Shortly after an attack Raiden is
+  still in one of them, so unloading the old weapon leaves the current motion pointing at freed data.
+  Idle swaps after 5-10 s work.
+- **Root cause, found with a Frida exception handler:**
+  - The crash's call chain goes through the player update (`0x00b94804`) into the motion code.
+  - The log showed the first switch succeed (2 → 4). Then the slot was back at 2 and was re-requested.
+  - The game refills the boss slot from the persistent record `[0x01b7588c]` (`0x009bbed3`), and the
+    menu's commit writes that record (`0x009b31a1`: `MOV [0x1B7588C],2/3/4`). The switch did not write
+    it, so the game still treated the old weapon as equipped and drove its motions with the new
+    weapon's data.
+- **Fix:** write `[0x01b7588c] = kind` with the request. `SettleMs` is back to 750.
+- The real fix is to check that the player's current motion is not from the weapon's set. That needs
+  the crash's call stack (Frida exception handler). `QuietMs` default lowered
+to 300.
+
+**Settings:** `[WeaponSwitch]` `Enabled`, `PadButton` (XInput mask, default 2 = D-pad down), `Key`., `QuietMs`.
+
 ## Next steps
 
 1. In-game test checklist. Every 600 frames, check `hfblade.log` for `mult≈0.5` at 120 fps.

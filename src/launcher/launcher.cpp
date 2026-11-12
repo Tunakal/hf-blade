@@ -49,9 +49,9 @@ static const int kColX = 196;     // right column origin
 struct Card { int tab, top, bottom; const wchar_t* title; };   // dialog units; x = kColX + 8 .. kColX + 260
 static const Card kCards[] = {
     { 0, 22, 86, L"FRAME RATE" },
-    { 0, 92, 146, L"FIXES" },
-    { 0, 152, 200, L"AFTERMATH" },
-    { 0, 206, 238, L"LAUNCHER" },
+    { 0, 92, 158, L"FIXES" },
+    { 0, 164, 212, L"AFTERMATH" },
+    { 0, 218, 250, L"LAUNCHER" },
     { 1, 22, 138, L"RESOLUTION" },
     { 1, 144, 238, L"SHAPE" },
     { 2, 22, 70, L"PHOTO MODE" },
@@ -60,7 +60,7 @@ static const Card kCards[] = {
 static int g_tab = 0;
 static int g_resW = 1920, g_resH = 1200;   // selected render size (H = 0: game default)
 static const int kTab0Ids[] = { IDC_L_FPS, IDC_FPS, IDC_L_MENU, IDC_MENUFPS, IDC_HFR, IDC_QTE, IDC_BLADE, IDC_L_EASE, IDC_EASE,
-                                IDC_EASEVAL, IDC_L_PIECES, IDC_KEEPCUTS, IDC_L_BODIES, IDC_KEEPBODIES, IDC_L_INTRO, IDC_INTRO, IDC_PREVIEW };
+                                IDC_EASEVAL, IDC_WEAPONSW, IDC_L_PIECES, IDC_KEEPCUTS, IDC_L_BODIES, IDC_KEEPBODIES, IDC_L_INTRO, IDC_INTRO, IDC_PREVIEW };
 static const int kTab1Ids[] = { IDC_L_RES, IDC_RES, IDC_VERTPLUS, IDC_RESINFO, IDC_RESNOTE };
 static const int kTab2Ids[] = { IDC_PHOTO, IDC_PHOTONOTE, IDC_PHOTOPAD, IDC_PHOTOPAD2, IDC_PHOTOKB, IDC_PHOTOKB2 };
 
@@ -488,7 +488,7 @@ static void ApplyWindowTheme(HWND dlg)
     DwmSetWindowAttribute(dlg, 34 /* DWMWA_BORDER_COLOR */, &border, sizeof border);
 }
 
-static bool IsToggle(int id) { return id == IDC_HFR || id == IDC_QTE || id == IDC_BLADE || id == IDC_VERTPLUS || id == IDC_PHOTO; }
+static bool IsToggle(int id) { return id == IDC_HFR || id == IDC_QTE || id == IDC_BLADE || id == IDC_VERTPLUS || id == IDC_PHOTO || id == IDC_WEAPONSW; }
 static bool GetToggle(HWND dlg, int id) { return GetWindowLongPtrW(GetDlgItem(dlg, id), GWLP_USERDATA) != 0; }
 static void SetToggle(HWND dlg, int id, bool on)
 {
@@ -939,6 +939,9 @@ static void WriteDefaults()
     WriteInt(L"PhotoMode", L"Enabled", cfg::kPhotoMode);
     WriteInt(L"PhotoMode", L"Key", cfg::kPhotoKey);
     WriteInt(L"PhotoMode", L"SpeedCmPerSec", cfg::kPhotoSpeed);
+    WriteInt(L"WeaponSwitch", L"Enabled", cfg::kWeaponSwitch);
+    WriteInt(L"WeaponSwitch", L"PadButton", cfg::kWeaponSwitchPad);
+    WriteInt(L"WeaponSwitch", L"Key", cfg::kWeaponSwitchKey);
 }
 
 static int AddItem(HWND combo, const wchar_t* text, int value)
@@ -1000,6 +1003,7 @@ static void Load(HWND dlg)
     SetToggle(dlg, IDC_HFR, ReadInt(L"General", L"HighFrameRate", cfg::kHighFrameRate) != 0);
     SetToggle(dlg, IDC_QTE, ReadInt(L"Fixes", L"QteFix", cfg::kQteFix) != 0);
     SetToggle(dlg, IDC_BLADE, ReadInt(L"Fixes", L"BladeModeFix", cfg::kBladeModeFix) != 0);
+    SetToggle(dlg, IDC_WEAPONSW, ReadInt(L"WeaponSwitch", L"Enabled", cfg::kWeaponSwitch) != 0);
     {   // render size: presets, the user's screen, or whatever the ini holds
         const int legacyH = ReadInt(L"Display", L"Height1920", cfg::kHeight);
         g_resH = ReadInt(L"Display", L"Height", legacyH);
@@ -1058,6 +1062,7 @@ static void Save(HWND dlg)
     WriteInt(L"General", L"HighFrameRate", GetToggle(dlg, IDC_HFR));
     WriteInt(L"Fixes", L"QteFix", GetToggle(dlg, IDC_QTE));
     WriteInt(L"Fixes", L"BladeModeFix", GetToggle(dlg, IDC_BLADE));
+    WriteInt(L"WeaponSwitch", L"Enabled", GetToggle(dlg, IDC_WEAPONSW));
     WriteInt(L"Fixes", L"QteEase", (int)SendDlgItemMessageW(dlg, IDC_EASE, TBM_GETPOS, 0, 0));
     const int res = SelectedValue(GetDlgItem(dlg, IDC_RES));
     WriteInt(L"Display", L"Width", res ? (res >> 16) & 0xFFFF : 1920);
@@ -1142,6 +1147,7 @@ static void AddTooltips(HWND dlg)
         { IDC_L_MENU, L"Frame rate for menus and the scenes the game runs in its 30 fps mode." },
         { IDC_HFR, L"Turns all frame-rate patches on or off. In game, F9 switches between the mod and the original 60 fps." },
         { IDC_QTE, L"At high frame rates button-mash QTEs (e.g. Sundowner's shield) would need twice the presses. This keeps them at real-time speed." },
+        { IDC_WEAPONSW, L"In game, D-pad down switches the unique (heavy attack) weapon to the next one you own, without opening the weapon menu." },
         { IDC_BLADE, L"Keeps Blade Mode slow motion and its synced animations at real-time speed at high frame rates." },
         { IDC_EASE, L"How fast a mash gauge drains at high fps, compared with the original. 100% = the same as 60 fps, lower = easier." },
         { IDC_L_EASE, L"How fast a mash gauge drains at high fps, compared with the original. 100% = the same as 60 fps, lower = easier." },
@@ -1196,7 +1202,7 @@ static INT_PTR CALLBACK DlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         g_sectionFont = MakeFont(dlg, 8, FW_BOLD, L"Segoe UI");
         g_uiFont = MakeFont(dlg, 9, FW_NORMAL, L"Segoe UI");
         g_btnFont = MakeFont(dlg, 9, FW_SEMIBOLD, L"Segoe UI");
-        const int owner[] = { IDC_HFR, IDC_QTE, IDC_BLADE, IDC_VERTPLUS, IDC_PLAY, IDC_SAVE, IDC_XMIN, IDC_XCLOSE, IDC_PREVIEW, IDC_MUTE, IDC_TAB0, IDC_TAB1, IDC_TAB2, IDC_PHOTO };
+        const int owner[] = { IDC_HFR, IDC_QTE, IDC_BLADE, IDC_VERTPLUS, IDC_PLAY, IDC_SAVE, IDC_XMIN, IDC_XCLOSE, IDC_PREVIEW, IDC_MUTE, IDC_TAB0, IDC_TAB1, IDC_TAB2, IDC_PHOTO, IDC_WEAPONSW };
         for (int id : owner) SetWindowSubclass(GetDlgItem(dlg, id), HoverProc, 1, 0);
         SetDlgItemTextW(dlg, IDC_HINT, kHint);
         SetWindowTextW(dlg, L"HF Blade");

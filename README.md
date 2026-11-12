@@ -42,6 +42,9 @@ The mod is a `dinput8.dll` proxy. It loads alongside dgVoodoo and ReShade withou
    enemies stay on the ground instead of exploding and vanishing.
 5. **Photo mode (F10).** Freezes the game, hides the HUD and gives you a free camera. See
    [Photo mode](#photo-mode) below.
+6. **Quick weapon switch (D-pad down).** Switches the unique (heavy attack) weapon to the next one you
+   own, without opening the weapon menu (`[WeaponSwitch]`; the button and an optional keyboard key are
+   configurable).
 
 The mod checks the exe's PE timestamp and the bytes at each patch site before changing anything. If
 any check fails it applies no patches and writes the reason to `hfblade.log`. Patches live only in
@@ -124,10 +127,15 @@ The launcher's Photo Mode tab shows the same controls.
   positive, because it loads into the game and patches its memory. Kaspersky has been seen doing this.
   Build it from source if you prefer, and add an exclusion for the game folder.
 - Button-mash QTEs, Blade Mode slow motion and the Blade Mode energy drain are scaled to real time
-  (`[Fixes]`). This includes Sundowner's shield QTE. `QteEase` (default 60%) also makes mash gauges drain slower at high fps.
+  (`[Fixes]`). This includes Sundowner's shield QTE.
+- Some particle effects (for example blood on the floor) count frames, so above 60 fps they used to
+  vanish too early. With `EffectTimingFix` (default on) effects update at 60 Hz with the right time
+  step, so they last as long as in the original game. `QteEase` (default 60%) also makes mash gauges drain slower at high fps.
   If a QTE still fails, press **F9** to switch to the original 60 fps, then press F9 again to switch
   back.
 - Timed hit-stop and short slow-motion effects still last half as long at 120 fps.
+- Quick weapon switch: switching while L'Étranger (polearm) is still in Raiden's hand after a Y attack
+  crashes the game. Switch to the sword (X) first. Other boss weapons are fine.
 - Menu auto-repeat (holding a direction) runs faster at high frame rates.
 - Controller rumble is shorter, because its timer counts frames.
 - Other game systems that ignore the frame multiplier may also run at the wrong speed. See the

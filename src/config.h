@@ -34,6 +34,9 @@ static const int kLogDebris    = 0;     // [Debris] LogDebris
 static const int kPhotoMode    = 1;     // [PhotoMode] Enabled
 static const int kPhotoKey     = 0x79;  // [PhotoMode] Key, F10
 static const int kPhotoSpeed   = 400;   // [PhotoMode] SpeedCmPerSec
+static const int kWeaponSwitch    = 1;      // [WeaponSwitch] Enabled
+static const int kWeaponSwitchPad = 0x0002; // [WeaponSwitch] PadButton, XInput D-pad down
+static const int kWeaponSwitchKey = 0;      // [WeaponSwitch] Key, none
 static const int kSound        = 1;     // [Launcher] Sound: cut sound effects on/off
 static const int kIntro        = 2;     // [Launcher] Intro: 0 = off, 1 = single cut (classic), 2 = flurry
 

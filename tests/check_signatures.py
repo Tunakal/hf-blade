@@ -40,6 +40,15 @@ SITES = {"Limiter": (0xF98070, bytes.fromhex("558BEC83E4F8")),
          "LerpWorld": (0xBC285A, bytes.fromhex("D88E30340000")),
          "LerpPlayer": (0xBC287C, bytes.fromhex("D88E30340000")),
          "BladeDrainRaiden": (0xBF256E, bytes.fromhex("D88E8C330000")),
+         "EspKick": (0xF43A20, bytes.fromhex("83EC0C5333DB")),
+         "WsDetach": (0xB7D0E0, bytes.fromhex("568DB1F80F0000")),
+         "WsBusy": (0xB7D0C0, bytes.fromhex("81C1F80F0000")),
+         "WsOwned": (0x9C4900, bytes.fromhex("8B4424048D48F3")),
+         "WsRequest": (0xB7F5E0, bytes.fromhex("E83B4309008B10")),
+         "EspCallA": (0xF41412, bytes.fromhex("8B42088BCE")),
+         "EspCallB": (0xF41470, bytes.fromhex("8B42088BCE")),
+         "EspCallC": (0xF41513, bytes.fromhex("8B50088BCE")),
+         "EspCtx": (0xEDFCA5, bytes.fromhex("D95E248B8F84000000")),
          "BladeDrainSam": (0x877147, bytes.fromhex("D88E8C330000")),
          "BladeDrainWolf": (0x8B8457, bytes.fromhex("D88E8C330000")),
          "TugPress": (0x584C3D, bytes.fromhex("D88E38090000")),
@@ -86,6 +95,9 @@ try:
     for name, (va, sig) in SITES.items():
         got = read(pi.hProcess, va + delta, len(sig))
         print("%-8s %s %s" % (name, got.hex(" ").upper(), "OK" if got == sig else "MISMATCH")); ok &= got == sig
+    got = struct.unpack("<I", read(pi.hProcess, 0x1656CA0 + delta, 4))[0]   # cTitleStart vtable slot 5
+    want = (0x9A7220 + delta) & 0xFFFFFFFF
+    print("TitleStartSlot 0x%08X %s" % (got, "OK" if got == want else "MISMATCH")); ok &= got == want
     for name, (va, operand0) in RELOCATED.items():
         got = read(pi.hProcess, va + delta, 6)
         want = bytes([0xD8, 0x25]) + struct.pack("<I", (operand0 + delta) & 0xFFFFFFFF)

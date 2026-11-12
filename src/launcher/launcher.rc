@@ -35,23 +35,24 @@ BEGIN
     COMBOBOX        IDC_MENUFPS, 348, 52, 100, 120, CB_STYLE
     CONTROL         "High frame rate patches", IDC_HFR, "Button", BS_OWNERDRAW | WS_TABSTOP, 212, 68, 236, 12
 
-    // FIXES card: y 92..146
+    // FIXES card: y 92..158
     CONTROL         "Button-mash QTE fix", IDC_QTE, "Button", BS_OWNERDRAW | WS_TABSTOP, 212, 107, 116, 12
     CONTROL         "Blade Mode fix", IDC_BLADE, "Button", BS_OWNERDRAW | WS_TABSTOP, 334, 107, 114, 12
     LTEXT           "QTE ease", IDC_L_EASE, 214, 128, 44, 9, LBL
     CONTROL         "", IDC_EASE, TRACKBAR_CLASS, TBS_HORZ | TBS_NOTICKS | WS_TABSTOP, 258, 123, 156, 16
     RTEXT           "60%", IDC_EASEVAL, 418, 128, 30, 9
+    CONTROL         "Quick weapon switch  (D-pad down)", IDC_WEAPONSW, "Button", BS_OWNERDRAW | WS_TABSTOP, 212, 141, 236, 12
 
-    // AFTERMATH card: y 152..200
-    LTEXT           "Keep pieces of the last", IDC_L_PIECES, 214, 169, 120, 9, LBL
-    COMBOBOX        IDC_KEEPCUTS, 348, 166, 100, 100, CB_STYLE
-    LTEXT           "Keep bodies of the last", IDC_L_BODIES, 214, 185, 120, 9, LBL
-    COMBOBOX        IDC_KEEPBODIES, 348, 182, 100, 120, CB_STYLE
+    // AFTERMATH card: y 164..212
+    LTEXT           "Keep pieces of the last", IDC_L_PIECES, 214, 181, 120, 9, LBL
+    COMBOBOX        IDC_KEEPCUTS, 348, 178, 100, 100, CB_STYLE
+    LTEXT           "Keep bodies of the last", IDC_L_BODIES, 214, 197, 120, 9, LBL
+    COMBOBOX        IDC_KEEPBODIES, 348, 194, 100, 120, CB_STYLE
 
-    // LAUNCHER card: y 206..238
-    LTEXT           "Opening animation", IDC_L_INTRO, 214, 223, 120, 9, LBL
-    COMBOBOX        IDC_INTRO, 348, 220, 80, 60, CB_STYLE
-    CONTROL         "Preview", IDC_PREVIEW, "Button", BS_OWNERDRAW | WS_TABSTOP, 432, 220, 16, 12
+    // LAUNCHER card: y 218..250
+    LTEXT           "Opening animation", IDC_L_INTRO, 214, 235, 120, 9, LBL
+    COMBOBOX        IDC_INTRO, 348, 232, 80, 60, CB_STYLE
+    CONTROL         "Preview", IDC_PREVIEW, "Button", BS_OWNERDRAW | WS_TABSTOP, 432, 232, 16, 12
 
     // ===== DISPLAY tab =====
     // RESOLUTION card: y 22..138
