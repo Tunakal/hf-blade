@@ -8,10 +8,10 @@ static const char kLegacyIniName[] = "mgr-hfr.ini";   // pre-rename name, migrat
 static const char kLogName[] = "hfblade.log";
 
 // Frame-rate presets offered by the launcher and cycled in game with PresetKey.
-static const int kPresets[] = { 60, 90, 120, 144, 165 };
+static const int kPresets[] = { 60, 90, 120, 144, 165, 240, 360 };
 static const int kPresetCount = int(sizeof kPresets / sizeof kPresets[0]);
 
-static const int kMinFps = 60, kMaxFps = 240;   // TargetFPS range
+static const int kMinFps = 60, kMaxFps = 360;   // TargetFPS range
 static const int kMinMenuFps = 30;              // MenuFPS range: 30..kMaxFps, 0 = same as TargetFPS
 
 // Defaults ([section] key).

@@ -29,13 +29,15 @@
 #define IDC_RES        1037
 #define IDC_RESINFO    1038
 #define IDC_RESNOTE    1039
-#define IDC_TAB0       1040
-#define IDC_TAB1       1041
-#define IDC_TAB2       1042
 #define IDC_PHOTO      1043
 #define IDC_PHOTOPAD   1044
 #define IDC_PHOTOKB    1045
-#define IDC_PHOTONOTE  1046
 #define IDC_PHOTOPAD2  1047
 #define IDC_PHOTOKB2   1048
 #define IDC_WEAPONSW   1049
+#define IDC_NAV0       1060   // sidebar rows: IDC_NAV0 .. IDC_NAV0 + 5 (Play, Gameplay, Display, Photo Mode, Launcher, Log)
+#define IDC_PLAYBIG    1070
+#define IDC_SOUND      1071
+#define IDC_LOGVIEW    1072
+#define IDC_LOGREFRESH 1073
+#define IDC_LOGFOLDER  1074

@@ -652,6 +652,44 @@ to 300.
 
 **Settings:** `[WeaponSwitch]` `Enabled`, `PadButton` (XInput mask, default 2 = D-pad down), `Key`., `QuietMs`.
 
+## 20. 240–360 fps
+
+- **Range and presets.** `kMaxFps` is now 360. The presets are 60, 90, 120, 144, 165, 240 and 360.
+  The minimum multiplier clamp becomes `60 / 360 = 0.167`.
+- **Frame-time precision (observed).** The multiplier update `0x00e03970` computes
+  `now - last` with `FLD ST0; FSUB [ESI+0x80]` at `0x00e03999`. Both values are float
+  milliseconds since startup (`0x00df8c10` → `0x00df81d0`). A float's resolution is 0.25 ms after
+  1 h and 1 ms after 4 h of play, so at 2.8 ms frames the multiplier would jitter by tens of percent.
+  - **Patch** (`PreciseFrameTime`, default on): those 8 bytes jump to a stub that returns a
+    double-precision QPC delta.
+  - The stub falls back to the game's own delta on the first call and for values ≤ 0 or > 1 s.
+  - It preserves flags and registers, because the `JNE` at `0x00e039a7` tests flags set before the
+    patch.
+- **Limiter.** It sleeps only while more than 2 ms remain, then spins. `Sleep(1)` overshoots by up
+  to about 1 ms, which is a third of a 360 fps frame.
+- **Effects.** The effect step factor cap was raised from 4 to 8: at 360 fps the effects update every
+  6th frame.
+- **Weapon switch.** The give-up timeout is now in time (5 s) instead of frames.
+- **Untested:** 240 and 360 fps in game. The user's display is 165 Hz, so a test above that needs
+  V-Sync off. Integer frame counters that §12 and §13 did not cover will be even further off at
+  360 fps.
+
+## 21. Camera turn speed (static)
+
+Reported 2026-11-12: the right-stick camera turned faster the higher the frame rate.
+- The camera integrates its angles every frame:
+  `[+0x790] += [+0x780] + [+0x778] + [+0x788]` (yaw), and the same pattern for pitch (`+0x794`), at
+  `0x00da248a` and `0x00daa35b`.
+- The stick term `[+0x780]` / `[+0x784]` is set by `0x00db89b0` / `0x00db8a40` from
+  `0x00db9880`, which 8 camera states call. That function turns the pad value (bytes / 255) into
+  `x*|x|*K*arg` (K = 0.4). Only the clamp, `mult * 8 deg`, is scaled by the multiplier.
+- **Patch** (`CameraTurnFix`): both `FMUL [ESP+0x4C]; FSTP [ESP]` sites (`0x00db99cb` pitch,
+  `0x00db9a3d` yaw) also multiply by `min(mult, 1)`. 60 fps and below are unchanged.
+- **Not changed:** the follow/recentre terms `+0x788` / `+0x78C` are per-frame lerps (diff × 0.1), so
+  auto-recentring is still a little faster at high fps.
+- **Unverified:** whether mouse look also goes through the stick path. If it does not, mouse speed is
+  unaffected.
+
 ## Next steps
 
 1. In-game test checklist. Every 600 frames, check `hfblade.log` for `mult≈0.5` at 120 fps.

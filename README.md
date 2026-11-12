@@ -2,7 +2,7 @@
 
 An open-source enhancement mod for *METAL GEAR RISING: REVENGEANCE* (PC, Steam). The goal is a
 remaster-like experience:
-- high frame rate (60–240 fps) with real-time gameplay, QTE and Blade Mode timing;
+- high frame rate (60–360 fps) with real-time gameplay, QTE and Blade Mode timing;
 - 16:10, wide and ultrawide with an aspect-correct FOV;
 - persistent cut debris and enemy bodies;
 - a photo mode (freeze, free camera, hidden HUD);
@@ -66,15 +66,19 @@ Settings live in `hfblade.ini`. An older `mgr-hfr.ini` from before the rename is
 automatically on first start.
 
 - **Launcher art (optional).** Put an image named `hfblade-launcher-art.jpg` or `.png` next to the launcher
-  and it is shown in the left column. No game art ships with this project.
+  and it is shown as the banner of the Play page. No game art ships with this project.
 - **Launcher sounds (optional).** Put `.mp3` or `.wav` files in a `hfblade-sounds` folder next to the
   launcher. They play with the opening cuts at a random pitch, volume and stereo position. The speaker
   button in the top bar mutes them (`[Launcher] Sound`). No sound files ship with this project.
-- **Launcher.** `hfblade-launcher.exe` edits `hfblade.ini` in two tabs:
-  - **Gameplay:** FPS preset (60/90/120/144/165), menu FPS, the fixes, QTE ease, debris and bodies;
+- **Launcher.** `hfblade-launcher.exe` edits `hfblade.ini`. A sidebar switches between these pages:
+  - **Play:** a summary and Save & Play;
+  - **Gameplay:** FPS preset (60 to 360), menu FPS, the fixes, QTE ease, the weapon switch, debris and bodies;
   - **Display:** render size and FOV.
+  - **Photo Mode:** the controls;
+  - **Launcher:** opening animation and sound;
+  - **Log:** the last lines of `hfblade.log`.
 
-  Hover over a setting to see what it does. The opening animation can be a flurry of cuts, a single
+  Every setting has a short description under it. The opening animation can be a flurry of cuts, a single
   cut or off, and has a preview button. **Save & Play** starts the game through Steam. Starting the
   game from the Steam library also works, because the mod always reads the ini.
 - **In game:**
@@ -88,7 +92,9 @@ automatically on first start.
   are still lying around. The target of a zandatsu (spine grab) still disappears as in the original
   game.
 - **Photo mode** (`[PhotoMode]`): see [Photo mode](#photo-mode).
-- Any other `TargetFPS` from 60 to 240 can be set in the ini. The launcher shows it as "Custom".
+- Any other `TargetFPS` from 60 to 360 can be set in the ini. The launcher shows it as "Custom".
+- Above 165 fps you need a matching display (or V-Sync off) and a fast CPU: the limiter mostly spins at
+  240–360 fps. Particle effects still update at 60 Hz (see `EffectTimingFix`).
 
 To actually reach 120 fps you need a 120 Hz+ display, or V-Sync turned off (for example in dgVoodoo).
 With `LogStats=1`, `hfblade.log` reports fps and the multiplier every 600 frames. At 120 fps the
@@ -119,13 +125,14 @@ Settings in `hfblade.ini` under `[PhotoMode]`:
 - `SpeedCmPerSec` (camera speed, default 400);
 - `PauseAudio` (default 1).
 
-The launcher's Photo Mode tab shows the same controls.
+The launcher's Photo Mode page shows the same controls.
 
 ## Known issues / open questions
 
 - **Antivirus:** some antivirus products quarantine the `dinput8.dll` proxy as a heuristic false
   positive, because it loads into the game and patches its memory. Kaspersky has been seen doing this.
   Build it from source if you prefer, and add an exclusion for the game folder.
+- The right-stick camera turns at the same speed at any frame rate (`CameraTurnFix`).
 - Button-mash QTEs, Blade Mode slow motion and the Blade Mode energy drain are scaled to real time
   (`[Fixes]`). This includes Sundowner's shield QTE.
 - Some particle effects (for example blood on the floor) count frames, so above 60 fps they used to

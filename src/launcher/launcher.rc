@@ -9,72 +9,77 @@
 1 ICON "launcher.ico"
 #endif
 
-// Borderless window: left art column (x 0..196, painted), right settings column (x 196..464) with
-// two tabs. Section cards are painted in launcher.cpp (kCards must match the y ranges below).
-// Toggles, buttons, tabs and combo boxes are owner-drawn. Labels use SS_NOTIFY for tooltips.
+// Borderless window. This template only lists the controls (in tab order); launcher.cpp (BuildLayout)
+// sizes the window and positions every control, and paints the sidebar, cards and descriptions.
+// Toggles, buttons, sidebar rows and combo boxes are owner-drawn. Labels use SS_NOTIFY for tooltips.
 #define CB_STYLE CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_VSCROLL | WS_TABSTOP
-#define LBL SS_NOTIFY
+#define LBL SS_NOTIFY | SS_CENTERIMAGE
+#define BTN BS_OWNERDRAW | WS_TABSTOP
 
-IDD_MAIN DIALOGEX 0, 0, 464, 292
+IDD_MAIN DIALOGEX 0, 0, 320, 240
 STYLE DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_SYSMENU | WS_MINIMIZEBOX
 EXSTYLE WS_EX_APPWINDOW
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
-    CONTROL         "GAMEPLAY", IDC_TAB0, "Button", BS_OWNERDRAW | WS_TABSTOP, 206, 2, 52, 16
-    CONTROL         "DISPLAY", IDC_TAB1, "Button", BS_OWNERDRAW | WS_TABSTOP, 260, 2, 46, 16
-    CONTROL         "PHOTO MODE", IDC_TAB2, "Button", BS_OWNERDRAW | WS_TABSTOP, 308, 2, 64, 16
-    CONTROL         "", IDC_MUTE, "Button", BS_OWNERDRAW | WS_TABSTOP, 404, 0, 20, 14
-    CONTROL         "", IDC_XMIN, "Button", BS_OWNERDRAW, 424, 0, 20, 14
-    CONTROL         "", IDC_XCLOSE, "Button", BS_OWNERDRAW, 444, 0, 20, 14
+    // Sidebar pages
+    CONTROL         "Play", IDC_NAV0, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Gameplay", IDC_NAV0 + 1, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Display", IDC_NAV0 + 2, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Photo Mode", IDC_NAV0 + 3, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Launcher", IDC_NAV0 + 4, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Log", IDC_NAV0 + 5, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "", IDC_MUTE, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "", IDC_XMIN, "Button", BS_OWNERDRAW, 0, 0, 10, 10
+    CONTROL         "", IDC_XCLOSE, "Button", BS_OWNERDRAW, 0, 0, 10, 10
 
-    // ===== GAMEPLAY tab =====
-    // FRAME RATE card: y 22..86
-    LTEXT           "Gameplay FPS", IDC_L_FPS, 214, 39, 100, 9, LBL
-    COMBOBOX        IDC_FPS, 348, 36, 100, 120, CB_STYLE
-    LTEXT           "Menu FPS", IDC_L_MENU, 214, 55, 100, 9, LBL
-    COMBOBOX        IDC_MENUFPS, 348, 52, 100, 120, CB_STYLE
-    CONTROL         "High frame rate patches", IDC_HFR, "Button", BS_OWNERDRAW | WS_TABSTOP, 212, 68, 236, 12
+    // Play
+    CONTROL         "Save && Play", IDC_PLAYBIG, "Button", BTN, 0, 0, 10, 10
 
-    // FIXES card: y 92..158
-    CONTROL         "Button-mash QTE fix", IDC_QTE, "Button", BS_OWNERDRAW | WS_TABSTOP, 212, 107, 116, 12
-    CONTROL         "Blade Mode fix", IDC_BLADE, "Button", BS_OWNERDRAW | WS_TABSTOP, 334, 107, 114, 12
-    LTEXT           "QTE ease", IDC_L_EASE, 214, 128, 44, 9, LBL
-    CONTROL         "", IDC_EASE, TRACKBAR_CLASS, TBS_HORZ | TBS_NOTICKS | WS_TABSTOP, 258, 123, 156, 16
-    RTEXT           "60%", IDC_EASEVAL, 418, 128, 30, 9
-    CONTROL         "Quick weapon switch  (D-pad down)", IDC_WEAPONSW, "Button", BS_OWNERDRAW | WS_TABSTOP, 212, 141, 236, 12
+    // Gameplay
+    LTEXT           "Gameplay FPS", IDC_L_FPS, 0, 0, 10, 10, LBL
+    COMBOBOX        IDC_FPS, 0, 0, 10, 10, CB_STYLE
+    LTEXT           "Menu FPS", IDC_L_MENU, 0, 0, 10, 10, LBL
+    COMBOBOX        IDC_MENUFPS, 0, 0, 10, 10, CB_STYLE
+    CONTROL         "High frame rate patches", IDC_HFR, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Button-mash QTE fix", IDC_QTE, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Blade Mode fix", IDC_BLADE, "Button", BTN, 0, 0, 10, 10
+    LTEXT           "QTE ease", IDC_L_EASE, 0, 0, 10, 10, LBL
+    CONTROL         "", IDC_EASE, TRACKBAR_CLASS, TBS_HORZ | TBS_NOTICKS | WS_TABSTOP, 0, 0, 10, 10
+    RTEXT           "60%", IDC_EASEVAL, 0, 0, 10, 10, SS_CENTERIMAGE
+    CONTROL         "Quick weapon switch  (D-pad down)", IDC_WEAPONSW, "Button", BTN, 0, 0, 10, 10
+    LTEXT           "Keep pieces of the last", IDC_L_PIECES, 0, 0, 10, 10, LBL
+    COMBOBOX        IDC_KEEPCUTS, 0, 0, 10, 10, CB_STYLE
+    LTEXT           "Keep bodies of the last", IDC_L_BODIES, 0, 0, 10, 10, LBL
+    COMBOBOX        IDC_KEEPBODIES, 0, 0, 10, 10, CB_STYLE
 
-    // AFTERMATH card: y 164..212
-    LTEXT           "Keep pieces of the last", IDC_L_PIECES, 214, 181, 120, 9, LBL
-    COMBOBOX        IDC_KEEPCUTS, 348, 178, 100, 100, CB_STYLE
-    LTEXT           "Keep bodies of the last", IDC_L_BODIES, 214, 197, 120, 9, LBL
-    COMBOBOX        IDC_KEEPBODIES, 348, 194, 100, 120, CB_STYLE
+    // Display
+    LTEXT           "Render size", IDC_L_RES, 0, 0, 10, 10, LBL
+    COMBOBOX        IDC_RES, 0, 0, 10, 10, CB_STYLE
+    CONTROL         "Aspect-correct field of view", IDC_VERTPLUS, "Button", BTN, 0, 0, 10, 10
+    LTEXT           "", IDC_RESINFO, 0, 0, 10, 10, SS_CENTERIMAGE
+    LTEXT           "The mod replaces the game's 1920x1080 option. In the game's graphics settings, pick 1920x1080 and fullscreen; it is then rendered at the size chosen here, with no black bars.", IDC_RESNOTE, 0, 0, 10, 10
 
-    // LAUNCHER card: y 218..250
-    LTEXT           "Opening animation", IDC_L_INTRO, 214, 235, 120, 9, LBL
-    COMBOBOX        IDC_INTRO, 348, 232, 80, 60, CB_STYLE
-    CONTROL         "Preview", IDC_PREVIEW, "Button", BS_OWNERDRAW | WS_TABSTOP, 432, 232, 16, 12
+    // Photo Mode
+    CONTROL         "Enable photo mode  (F10 in game)", IDC_PHOTO, "Button", BTN, 0, 0, 10, 10
+    LTEXT           "CONTROLLER\n\nLeft stick\nRight stick\nLT / RT\nLB / RB\nD-pad up / down\nL3 (hold)\nY\nX", IDC_PHOTOPAD, 0, 0, 10, 10, SS_NOPREFIX
+    LTEXT           "\n\nmove\nlook\ndown / up\nroll\nzoom in / out\nfaster\nreset\nHUD on / off", IDC_PHOTOPAD2, 0, 0, 10, 10, SS_NOPREFIX
+    LTEXT           "KEYBOARD\n\nW A S D\nMouse / arrows\nCtrl / Space\nQ / E\nZ / X\nShift / Alt\nR\nH", IDC_PHOTOKB, 0, 0, 10, 10, SS_NOPREFIX
+    LTEXT           "\n\nmove\nlook\ndown / up\nroll\nzoom in / out\nfaster / slower\nreset\nHUD on / off", IDC_PHOTOKB2, 0, 0, 10, 10, SS_NOPREFIX
 
-    // ===== DISPLAY tab =====
-    // RESOLUTION card: y 22..138
-    LTEXT           "Render size", IDC_L_RES, 214, 39, 100, 9, LBL
-    COMBOBOX        IDC_RES, 330, 36, 118, 160, CB_STYLE
-    CONTROL         "Aspect-correct field of view", IDC_VERTPLUS, "Button", BS_OWNERDRAW | WS_TABSTOP, 212, 53, 236, 12
-    LTEXT           "", IDC_RESINFO, 214, 72, 234, 20
-    LTEXT           "The mod replaces the game's 1920x1080 option. In the game's graphics settings, pick 1920x1080 and fullscreen; it is then rendered at the size chosen here, with no black bars.", IDC_RESNOTE, 214, 98, 234, 34
+    // Launcher
+    LTEXT           "Opening animation", IDC_L_INTRO, 0, 0, 10, 10, LBL
+    COMBOBOX        IDC_INTRO, 0, 0, 10, 10, CB_STYLE
+    CONTROL         "Preview", IDC_PREVIEW, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Sound effects", IDC_SOUND, "Button", BTN, 0, 0, 10, 10
 
-    // ===== PHOTO MODE tab =====
-    // PHOTO MODE card: y 22..70
-    CONTROL         "Enable photo mode  (F10 in game)", IDC_PHOTO, "Button", BS_OWNERDRAW | WS_TABSTOP, 212, 37, 236, 12
-    LTEXT           "Freezes the game, hides the HUD and gives you a free camera. Press F10 again to continue playing.", IDC_PHOTONOTE, 214, 52, 234, 16
-    // CONTROLS card: y 76..238
-    LTEXT           "CONTROLLER\n\nLeft stick\nRight stick\nLT / RT\nLB / RB\nD-pad up / down\nL3 (hold)\nY\nX", IDC_PHOTOPAD, 214, 92, 62, 140, SS_NOPREFIX
-    LTEXT           "\n\nmove\nlook\ndown / up\nroll\nzoom in / out\nfaster\nreset\nHUD on / off", IDC_PHOTOPAD2, 278, 92, 54, 140, SS_NOPREFIX
-    LTEXT           "KEYBOARD\n\nW A S D\nMouse / arrows\nCtrl / Space\nQ / E\nZ / X\nShift / Alt\nR\nH", IDC_PHOTOKB, 336, 92, 60, 140, SS_NOPREFIX
-    LTEXT           "\n\nmove\nlook\ndown / up\nroll\nzoom in / out\nfaster / slower\nreset\nHUD on / off", IDC_PHOTOKB2, 398, 92, 52, 140, SS_NOPREFIX
+    // Log
+    CONTROL         "Refresh", IDC_LOGREFRESH, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Open folder", IDC_LOGFOLDER, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "", IDC_LOGVIEW, "Edit", ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_TABSTOP, 0, 0, 10, 10
 
-    LTEXT           "", IDC_HINT, 206, 245, 250, 9
-    LTEXT           "", IDC_WARN, 206, 256, 250, 9
-
-    CONTROL         "Save", IDC_SAVE, "Button", BS_OWNERDRAW | WS_TABSTOP, 324, 270, 54, 15
-    CONTROL         "Save && Play", IDC_PLAY, "Button", BS_OWNERDRAW | WS_TABSTOP, 382, 270, 74, 15
+    // Bottom bar
+    LTEXT           "", IDC_HINT, 0, 0, 10, 10, SS_CENTERIMAGE
+    LTEXT           "", IDC_WARN, 0, 0, 10, 10, SS_CENTERIMAGE
+    CONTROL         "Save", IDC_SAVE, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Save && Play", IDC_PLAY, "Button", BTN, 0, 0, 10, 10
 END

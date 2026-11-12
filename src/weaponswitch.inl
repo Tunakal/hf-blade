@@ -46,7 +46,7 @@ static struct {
     ULONGLONG queuedAt = 0;
     int   quietMs = 300;
     int   settleMs = 750;
-    int   pendingFrames = 0;
+    ULONGLONG pendingSince = 0;
     int   fromKind = 0, toKind = 0;
 } g_ws;
 
@@ -97,7 +97,7 @@ static void WsRequestNext()
     reinterpret_cast<WsArgFn>(VA_WS_REQUEST + g_delta)(pl, nullptr, next);
     *At<uint32_t>(VA_WS_DIRTY) = 1;
     g_ws.pending = true;
-    g_ws.pendingFrames = 0;
+    g_ws.pendingSince = GetTickCount64();
     g_ws.fromKind = cur;
     g_ws.toKind = next;
     if (g_sndPost) g_sndPost("core_se_sys_custom_item_equip", 0);
@@ -108,7 +108,7 @@ static void WsFinish()
 {
     void* pl = WsPlayer();
     if (!pl) { g_ws.pending = false; return; }
-    if (++g_ws.pendingFrames > 60 * 10) {
+    if (GetTickCount64() - g_ws.pendingSince > 5000) {
         Log("Weapon switch: weapon %d did not finish loading; giving up.", g_ws.toKind);
         g_ws.pending = false;
         return;

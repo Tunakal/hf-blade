@@ -28,6 +28,19 @@ static const uintptr_t VA_FRAME_MULT   = 0x01BE942C; // float: frame multiplier 
 static const uintptr_t VA_MULT_SCALE   = 0x01BE9438; // float: ms -> multiplier scale
 static const uintptr_t VA_FIXED_SITE   = 0x00E039A9; // fixed-multiplier path: FSTP ST0; FSTP ST1; FLD [ESP+0x10]
 static const uintptr_t VA_FIXED_RESUME = 0x00E039B1; // FSTP [ESI+0x7C]
+// Frame-time delta in the multiplier update 0xE03970: "FLD ST0; FSUB [ESI+0x80]" = now - last, both float
+// milliseconds since startup (0xDF81D0). A float holds ~7 digits, so after an hour of play the step is
+// 0.25 ms and after four hours 1 ms: fine at 60 fps, but at 240-360 fps (2.8-4.2 ms frames) the
+// multiplier jitters by 10-35 %. Replaced with a double-precision QPC delta.
+static const uintptr_t VA_FRAME_DELTA  = 0x00E03999;
+static const uintptr_t VA_FRAME_DELTA_RESUME = 0x00E039A1; // FST [ESI+0x8C]
+static const uint8_t   kFrameDeltaOrig[] = { 0xD9, 0xC0, 0xD8, 0xA6, 0x80, 0x00, 0x00, 0x00 };
+// Camera turn speed. 0xDB9880 (shared by 8 camera states) turns the right-stick value into a per-frame
+// rotation "x*|x|*K*arg" and only its upper limit is scaled by the multiplier, so the camera turned
+// faster the higher the frame rate. Both products (pitch, yaw): FMUL [ESP+0x4C]; FSTP [ESP].
+static const uintptr_t VA_CAM_PITCH    = 0x00DB99CB, VA_CAM_PITCH_RESUME = 0x00DB99D2;
+static const uintptr_t VA_CAM_YAW      = 0x00DB9A3D, VA_CAM_YAW_RESUME   = 0x00DB9A44;
+static const uint8_t   kCamTurnOrig[]  = { 0xD8, 0x4C, 0x24, 0x4C, 0xD9, 0x1C, 0x24 };
 static const uintptr_t VA_FLAGS_060    = 0x01BEA060; // main-loop state flags that select 30 fps / fixed timing
 static const uintptr_t VA_FLAGS_064    = 0x01BEA064;
 static const uintptr_t VA_FLAGS_084    = 0x01BEA084;
@@ -120,6 +133,70 @@ extern "C" {
 }
 static float g_qteEase = 1.0f;      // [Fixes] QteEase / 100: fraction of the original gauge decay kept in HFR
 
+// Precise frame delta for 0xE03970 (see VA_FRAME_DELTA). Falls back to the game's own float delta on the
+// first call and for implausible values.
+extern "C" {
+    float     g_fdNow = 0.0f;
+    uintptr_t g_frameDeltaResume = 0;
+}
+extern "C" double __cdecl PreciseFrameDelta(float nowMs, float lastMs)
+{
+    static LARGE_INTEGER freq = {}, last = {};
+    LARGE_INTEGER c;
+    QueryPerformanceCounter(&c);
+    if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
+    const double fallback = double(nowMs) - double(lastMs);
+    if (!last.QuadPart) { last = c; return fallback; }
+    const double ms = double(c.QuadPart - last.QuadPart) * 1000.0 / double(freq.QuadPart);
+    last = c;
+    if (!(ms > 0.0) || ms > 1000.0) return fallback;
+    return ms;
+}
+
+// Replaces "FLD ST0; FSUB [ESI+0x80]". In: ST0 = now (float ms). Out: ST0 = delta, ST1 = now.
+extern "C" __declspec(naked) void FrameDeltaHook()
+{
+    __asm {
+        pushfd                                  // the caller tests flags (CMP at 0xE03994) after this
+        pushad
+        sub   esp, 8
+        fst   dword ptr [esp]                   // nowMs
+        fld   dword ptr [esi + 0x80]
+        fstp  dword ptr [esp + 4]               // lastMs
+        fstp  dword ptr [g_fdNow]               // FPU stack now empty, as the C ABI expects
+        call  PreciseFrameDelta                 // ST0 = delta
+        add   esp, 8
+        fld   dword ptr [g_fdNow]               // ST0 = now, ST1 = delta
+        fxch  st(1)                             // ST0 = delta, ST1 = now
+        popad
+        popfd
+        jmp   dword ptr [g_frameDeltaResume]
+    }
+}
+
+extern "C" {
+    float     g_camScale = 1.0f;        // min(mult, 1) while HFR is on, else 1
+    uintptr_t g_camPitchResume = 0, g_camYawResume = 0;
+}
+extern "C" __declspec(naked) void CamPitchHook()
+{
+    __asm {
+        fmul  dword ptr [esp + 0x4C]
+        fmul  dword ptr [g_camScale]
+        fstp  dword ptr [esp]
+        jmp   dword ptr [g_camPitchResume]
+    }
+}
+extern "C" __declspec(naked) void CamYawHook()
+{
+    __asm {
+        fmul  dword ptr [esp + 0x4C]
+        fmul  dword ptr [g_camScale]
+        fstp  dword ptr [esp]
+        jmp   dword ptr [g_camYawResume]
+    }
+}
+
 // Called once per frame. The game computes the multiplier at the start of the next frame;
 // using the latest value is accurate to within one frame.
 static void UpdateFrameScalars()
@@ -128,6 +205,7 @@ static void UpdateFrameScalars()
     const float mult = *reinterpret_cast<float*>(0x01BE942C + g_delta);
     const float ease = g_hfrOn ? g_qteEase : 1.0f;
     g_easeNow = ease;
+    g_camScale = (g_hfrOn && mult > 0.0f && mult < 1.0f) ? mult : 1.0f;
     g_qteDecay = 0.01f * mult * ease;
     acc += mult;
     const int ticks = int(acc);
@@ -465,7 +543,9 @@ static void Pace(int fps)
         g_deadline = now + period;
         return;
     }
-    const int64_t spinWindow = g_freq.QuadPart * 15 / 10000; // 1.5 ms
+    // Sleep(1) can overshoot by ~1 ms, so only sleep while more than 2 ms remain, then spin.
+    // At 240-360 fps (2.8-4.2 ms frames) this is mostly spinning.
+    const int64_t spinWindow = g_freq.QuadPart * 2 / 1000;   // 2 ms
     while (g_deadline - now > spinWindow) {
         Sleep(1);                                            // game already called timeBeginPeriod(1)
         now = Now();
@@ -786,7 +866,7 @@ extern "C" void __cdecl EspFrameTick()
     g_espAcc += m;
     if (m >= 0.95f || g_espAcc >= 0.999f) {
         g_espFactor = g_espAcc / m;
-        if (g_espFactor > 4.0f) g_espFactor = 4.0f;
+        if (g_espFactor > 8.0f) g_espFactor = 8.0f;   // 360 fps updates every 6th frame
         g_espAcc = 0.0f;
         g_espSkip = 0;
     } else {
@@ -1564,6 +1644,21 @@ static void Install()
     WriteJmp(VA_CLAMP_SITE, &ClampHook, sizeof kClampOrig);
     WriteJmp(VA_FIXED_SITE, &FixedHook, sizeof kFixedOrig);
     WriteJmp(VA_LIMITER, &LimiterHook, sizeof kLimiterOrig);
+    if (GetPrivateProfileIntA("General", "PreciseFrameTime", 1, ini) &&
+        Matches("FrameDelta", VA_FRAME_DELTA, kFrameDeltaOrig, sizeof kFrameDeltaOrig)) {
+        g_frameDeltaResume = VA_FRAME_DELTA_RESUME + g_delta;
+        WriteJmp(VA_FRAME_DELTA, &FrameDeltaHook, sizeof kFrameDeltaOrig);
+        Log("Frame time: measured with double-precision QPC (no float drift in long sessions).");
+    }
+    if (GetPrivateProfileIntA("Fixes", "CameraTurnFix", 1, ini) &&
+        Matches("CamPitch", VA_CAM_PITCH, kCamTurnOrig, sizeof kCamTurnOrig) &&
+        Matches("CamYaw", VA_CAM_YAW, kCamTurnOrig, sizeof kCamTurnOrig)) {
+        g_camPitchResume = VA_CAM_PITCH_RESUME + g_delta;
+        g_camYawResume = VA_CAM_YAW_RESUME + g_delta;
+        WriteJmp(VA_CAM_PITCH, &CamPitchHook, sizeof kCamTurnOrig);
+        WriteJmp(VA_CAM_YAW, &CamYawHook, sizeof kCamTurnOrig);
+        Log("Camera: stick turn speed scaled to real time.");
+    }
     Log("Patched: TargetFPS=%d MenuFPS=%d minMult=%.3f fixedScale=%.3f ToggleKey=0x%02X PresetKey=0x%02X base=0x%08X",
         g_targetFps, g_menuFps, g_minMult, g_fixedScale, g_toggleKey, g_presetKey, (unsigned)base);
 
