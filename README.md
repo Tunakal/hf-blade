@@ -65,11 +65,13 @@ Copy `build\dinput8.dll`, `hfblade.ini` and, if you want it, `build\hfblade-laun
 Settings live in `hfblade.ini`. An older `mgr-hfr.ini` from before the rename is copied over
 automatically on first start.
 
-- **Launcher art (optional).** Put an image named `hfblade-launcher-art.jpg` or `.png` next to the launcher
-  and it is shown as the banner of the Play page. No game art ships with this project.
-- **Launcher sounds (optional).** Put `.mp3` or `.wav` files in a `hfblade-sounds` folder next to the
-  launcher. They play with the opening cuts at a random pitch, volume and stereo position. The speaker
-  button in the top bar mutes them (`[Launcher] Sound`). No sound files ship with this project.
+- **Launcher art.** The Play page shows a built-in banner: a Raiden drawing by the project author,
+  under the project's MIT license. To use your own picture instead, put an image named
+  `hfblade-launcher-art.jpg` or `.png` next to the launcher. No game art ships with this project.
+- **Launcher sounds.** The opening cuts play three sword sounds that the launcher synthesizes in code,
+  at a random pitch, volume and stereo position. To use your own, put `.mp3` or `.wav` files in a
+  `hfblade-sounds` folder next to the launcher. The speaker button in the top bar mutes them
+  (`[Launcher] Sound`). No game sounds ship with this project.
 - **Launcher.** `hfblade-launcher.exe` edits `hfblade.ini`. A sidebar switches between these pages:
   - **Play:** a summary and Save & Play;
   - **Gameplay:** FPS preset (60 to 360), menu FPS, the fixes, QTE ease, the weapon switch, debris and bodies;

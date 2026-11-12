@@ -9,6 +9,9 @@
 1 ICON "launcher.ico"
 #endif
 
+// Built-in Play-page banner: Tunahan's own Raiden drawing, tinted (same license as the project).
+2 RCDATA "banner.jpg"
+
 // Borderless window. This template only lists the controls (in tab order); launcher.cpp (BuildLayout)
 // sizes the window and positions every control, and paints the sidebar, cards and descriptions.
 // Toggles, buttons, sidebar rows and combo boxes are owner-drawn. Labels use SS_NOTIFY for tooltips.
