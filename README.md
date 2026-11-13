@@ -7,6 +7,7 @@ remaster-like experience:
 - persistent cut debris and enemy bodies;
 - a photo mode (freeze, free camera, hidden HUD);
 - a quick boss-weapon switch on the D-pad;
+- optional PlayStation button icons for DualSense and DualShock players;
 - optional cheats (infinite health, fuel cells and repair items), switchable while you play;
 - a settings launcher.
 
@@ -48,10 +49,18 @@ The mod is a `dinput8.dll` proxy. It loads alongside dgVoodoo and ReShade withou
 6. **Quick weapon switch (D-pad down).** Switches the unique (heavy attack) weapon to the next one you
    own, without opening the weapon menu (`[WeaponSwitch]`; the button and an optional keyboard key are
    configurable).
-7. **Cheats (off by default).** Infinite health, infinite fuel cells, and Repair Units and Electrolyte
+7. **PlayStation button icons (off by default).** The game only has Xbox button icons on PC. With
+   `[Display] ButtonIcons=1` (launcher page "Controller") the prompts and menus show PlayStation
+   buttons instead: cross, circle, square, triangle, L1/R1/L2/R2, L3/R3, OPTIONS and CREATE. The icons
+   are drawn by this project (`tools/make_button_icons.py`, preview in
+   [docs/button-icons.png](docs/button-icons.png)) and written over the Xbox ones when the game loads
+   its button texture; the game's files are not changed. The game reads controllers only through
+   XInput, so a DualSense or DualShock still needs Steam Input (on by default for PlayStation pads in
+   Steam) or DS4Windows.
+8. **Cheats (off by default).** Infinite health, infinite fuel cells, and Repair Units and Electrolyte
    packs that are not used up (`[Cheats]`, launcher page "Cheats"). Saving in the launcher switches
    them on or off in the running game within about a second. See [Cheats](#cheats) below.
-8. **Timing fixes above 60 fps.** Systems that count frames are brought back to real time:
+9. **Timing fixes above 60 fps.** Systems that count frames are brought back to real time:
    - the right-stick camera turns at the same speed at any frame rate (`CameraTurnFix`);
    - button-mash QTEs (including Sundowner's shield), Blade Mode slow motion and the Blade Mode energy
      drain (`[Fixes]`); `QteEase` (default 60%) also makes mash gauges drain slower;
@@ -89,11 +98,12 @@ automatically on first start.
   (`[Launcher] Sound`). No game sounds ship with this project.
 - **Launcher.** `hfblade-launcher.exe` edits `hfblade.ini`. A sidebar switches between these pages:
   - **Play:** a summary and Save & Play;
-  - **Gameplay:** FPS preset (60 to 360), menu FPS, the fixes, QTE ease, the weapon switch, debris and bodies;
+  - **Gameplay:** FPS preset (60 to 360), menu FPS, the fixes, QTE ease, debris and bodies;
   - **Display:** render size, FOV and supersampling. Supersampling (on/off, factor 1.78x or 2.25x)
     renders the game larger than the render size and lets NVIDIA DLDSR or AMD VSR shrink it to the
     screen, for a cleaner image. The driver option must be on. It can lower fps a lot (in one test, 2.25x
     on a laptop RTX 5070 Ti went from about 200 to 110 fps).
+  - **Controller:** PlayStation button icons and the quick weapon switch;
   - **Photo Mode:** the controls;
   - **Cheats:** infinite health, fuel cells and repair items;
   - **Launcher:** opening animation and sound;
@@ -179,6 +189,7 @@ Only tested with Raiden in the main story; the DLC characters are untested.
 - Other game systems that ignore the frame multiplier may also run at the wrong speed. See the
   checklist in [docs/RESEARCH.md](docs/RESEARCH.md).
 - Photo mode: mouse look does not work yet; use the arrow keys or the right stick.
+- PlayStation button icons: the controls screen still shows the Xbox controller drawing.
 
 ## Legal
 

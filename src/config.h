@@ -28,6 +28,7 @@ static const int kBladeModeFix = 1;     // [Fixes] BladeModeFix
 static const int kWidth        = 1920;  // [Display] Width  (render size for the game's "1920x1080" option)
 static const int kHeight       = 1200;  // [Display] Height (0 = off; older configs: Height1920)
 static const int kVertPlusFov  = 1;     // [Display] VertPlusFov
+static const int kButtonIcons  = 0;     // [Display] ButtonIcons: 0 = Xbox (game), 1 = PlayStation
 static const int kKeepLastCuts = 2;     // [Debris] KeepLastCuts, 0 = off, max 8
 static const int kKeepCorpses  = 3;     // [Debris] KeepCorpses, 0 = off, max 8
 static const int kKeepGekko    = 0;     // [Debris] KeepGekko: 1 = keep GEKKO bodies and pieces too

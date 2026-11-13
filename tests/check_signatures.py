@@ -145,6 +145,12 @@ try:
     good = p[0] == 0xA1 and operand == (0x01F206D4 + delta) & 0xFFFFFFFF
     print("Present  %02X %08X (expect A1 %08X) %s" % (p[0], operand, (0x01F206D4 + delta) & 0xFFFFFFFF, "OK" if good else "MISMATCH"))
     ok &= good
+    p = read(pi.hProcess, 0x1436F9E + delta, 6)   # D3DXCreateTextureFromFileInMemoryEx thunk: JMP [iat]
+    operand = struct.unpack("<I", p[2:])[0]
+    want = (0x015FD378 + delta) & 0xFFFFFFFF
+    good = p[:2] == bytes.fromhex("FF25") and operand == want
+    print("TexThunk %s (expect FF25 %08X) %s" % (p.hex(" "), want, "OK" if good else "MISMATCH"))
+    ok &= good
     print("RESULT:", "PASS" if ok else "FAIL")
 finally:
     k32.TerminateProcess(pi.hProcess, 0)

@@ -59,8 +59,8 @@ static Color C(COLORREF c, BYTE a = 255) { return Color(a, GetRValue(c), GetGVal
 // ---------------------------------------------------------------------------
 static const int kWinW = 1000, kWinH = 740, kSideW = 220, kPadX = 24, kBarH = 56;
 
-enum { PG_PLAY, PG_GAME, PG_DISP, PG_PHOTO, PG_CHEAT, PG_LAUNCH, PG_LOG, PG_COUNT };
-static const wchar_t* const kPageNames[PG_COUNT] = { L"Play", L"Gameplay", L"Display", L"Photo Mode", L"Cheats", L"Launcher", L"Log" };
+enum { PG_PLAY, PG_GAME, PG_DISP, PG_PAD, PG_PHOTO, PG_CHEAT, PG_LAUNCH, PG_LOG, PG_COUNT };
+static const wchar_t* const kPageNames[PG_COUNT] = { L"Play", L"Gameplay", L"Display", L"Controller", L"Photo Mode", L"Cheats", L"Launcher", L"Log" };
 
 static float g_scale = 1.0f;
 static int S(int v) { return (int)floorf(float(v) * g_scale + 0.5f); }
@@ -191,6 +191,7 @@ static const Tip kTips[] = {
     { IDC_CH_HEALTH, 0, L"Raiden's health is kept full. Hits that kill outright, such as falling off the map, still kill." },
     { IDC_CH_FUEL, 0, L"The fuel cells (Blade Mode and Ripper Mode energy) are kept full." },
     { IDC_CH_ITEMS, 0, L"Repair Units (health) and Electrolyte packs (fuel cells) are not used up when you use them. Turned off, they are used up again." },
+    { IDC_PSICONS, 0, L"Shows PlayStation buttons (cross, circle, L1, OPTIONS...) instead of the Xbox ones in the game's prompts and menus. For a DualSense or DualShock played through Steam Input. Takes effect the next time the game starts." },
     { IDC_VERTPLUS, 0, L"Keeps the picture from looking zoomed in on screens that are not 16:9: taller screens get more view above and below, wider screens more at the sides. Also keeps the 3D HUD layer at the right size." },
     { IDC_PHOTO, 0, L"In game, F10 freezes everything, hides the HUD and lets you fly the camera to take screenshots (PrtSc with ReShade, F12 with Steam). F10 again resumes the game where it stopped." },
     { IDC_SAVE, 0, L"Save the settings to hfblade.ini." },
@@ -324,7 +325,6 @@ static void BuildLayout(HWND dlg)
     PlaceCtl(dlg, PG_GAME, IDC_EASEVAL, IX() + IW() - S(44), g_cy, S(44), g_ctlH);
     g_cy += g_ctlH + S(4);
     RowDesc(dc, DescFor(IDC_EASE));
-    RowToggle(dlg, dc, IDC_WEAPONSW);
     EndCard();
     BeginCard(PG_GAME, L"AFTERMATH");
     RowCombo(dlg, dc, IDC_L_PIECES, IDC_KEEPCUTS, S(220), 0);
@@ -349,6 +349,13 @@ static void BuildLayout(HWND dlg)
     g_cy += S(154);
     g_shapeCap = { IX(), g_cy, IX() + IW(), g_cy + S(20) };
     g_cy += S(30);
+    EndCard();
+
+    // Controller.
+    g_cy = top;
+    BeginCard(PG_PAD, L"CONTROLLER");
+    RowToggle(dlg, dc, IDC_PSICONS);
+    RowToggle(dlg, dc, IDC_WEAPONSW);
     EndCard();
 
     // Photo Mode.
@@ -426,6 +433,13 @@ static void DrawNavIcon(Graphics& g, int idx, REAL x, REAL y, REAL s, COLORREF c
         g.DrawPath(&p, &path);
         g.DrawLine(&p, x + 7 * u, y + 18 * u, x + 13 * u, y + 18 * u);
         g.DrawLine(&p, x + 10 * u, y + 15 * u, x + 10 * u, y + 18 * u);
+        break;
+    }
+    case PG_PAD: {   // face buttons
+        g.DrawEllipse(&p, x + 7.5f * u, y + 1.5f * u, 5 * u, 5 * u);
+        g.DrawEllipse(&p, x + 1.5f * u, y + 7.5f * u, 5 * u, 5 * u);
+        g.DrawEllipse(&p, x + 13.5f * u, y + 7.5f * u, 5 * u, 5 * u);
+        g.DrawEllipse(&p, x + 7.5f * u, y + 13.5f * u, 5 * u, 5 * u);
         break;
     }
     case PG_PHOTO: {   // camera
@@ -964,7 +978,7 @@ static void ApplyWindowTheme(HWND dlg)
     DwmSetWindowAttribute(dlg, 34 /* DWMWA_BORDER_COLOR */, &border, sizeof border);
 }
 
-static bool IsToggle(int id) { return id == IDC_HFR || id == IDC_QTE || id == IDC_BLADE || id == IDC_VERTPLUS || id == IDC_SUPERSAMPLE || id == IDC_CH_HEALTH || id == IDC_CH_FUEL || id == IDC_CH_ITEMS || id == IDC_PHOTO || id == IDC_WEAPONSW || id == IDC_SOUND; }
+static bool IsToggle(int id) { return id == IDC_HFR || id == IDC_QTE || id == IDC_BLADE || id == IDC_VERTPLUS || id == IDC_SUPERSAMPLE || id == IDC_PSICONS || id == IDC_CH_HEALTH || id == IDC_CH_FUEL || id == IDC_CH_ITEMS || id == IDC_PHOTO || id == IDC_WEAPONSW || id == IDC_SOUND; }
 static bool IsCombo(int id) { return id == IDC_FPS || id == IDC_MENUFPS || id == IDC_KEEPCUTS || id == IDC_KEEPBODIES || id == IDC_INTRO || id == IDC_RES || id == IDC_SSFACTOR; }
 static void SetToggle(HWND dlg, int id, bool on)
 {
@@ -1413,6 +1427,7 @@ static void WriteDefaults()
     WriteInt(L"Display", L"Width", cfg::kWidth);
     WriteInt(L"Display", L"Height", cfg::kHeight);
     WriteInt(L"Display", L"VertPlusFov", cfg::kVertPlusFov);
+    WriteInt(L"Display", L"ButtonIcons", cfg::kButtonIcons);
     WriteInt(L"Debris", L"KeepLastCuts", cfg::kKeepLastCuts);
     WriteInt(L"Debris", L"KeepCorpses", cfg::kKeepCorpses);
     WriteInt(L"Debris", L"LogDebris", cfg::kLogDebris);
@@ -1533,6 +1548,7 @@ static void Load(HWND dlg)
     }
     SetToggle(dlg, IDC_VERTPLUS, ReadInt(L"Display", L"VertPlusFov", cfg::kVertPlusFov) != 0);
     SetToggle(dlg, IDC_SUPERSAMPLE, g_ssOn);
+    SetToggle(dlg, IDC_PSICONS, ReadInt(L"Display", L"ButtonIcons", cfg::kButtonIcons) == 1);
     SetToggle(dlg, IDC_CH_HEALTH, ReadInt(L"Cheats", L"InfiniteHealth", 0) != 0);
     SetToggle(dlg, IDC_CH_FUEL, ReadInt(L"Cheats", L"InfiniteFuelCells", 0) != 0);
     SetToggle(dlg, IDC_CH_ITEMS, ReadInt(L"Cheats", L"InfiniteRepairItems", 0) != 0);
@@ -1580,6 +1596,7 @@ static void Save(HWND dlg)
     WriteInt(L"Display", L"Supersample", GetToggle(dlg, IDC_SUPERSAMPLE));
     WriteInt(L"Display", L"SupersampleFactor", SelectedValue(GetDlgItem(dlg, IDC_SSFACTOR)));
     WriteInt(L"Display", L"VertPlusFov", GetToggle(dlg, IDC_VERTPLUS));
+    WriteInt(L"Display", L"ButtonIcons", GetToggle(dlg, IDC_PSICONS));
     WriteInt(L"PhotoMode", L"Enabled", GetToggle(dlg, IDC_PHOTO));
     WriteInt(L"Debris", L"KeepLastCuts", SelectedValue(GetDlgItem(dlg, IDC_KEEPCUTS)));
     WriteInt(L"Debris", L"KeepCorpses", SelectedValue(GetDlgItem(dlg, IDC_KEEPBODIES)));
@@ -1811,7 +1828,7 @@ static INT_PTR CALLBACK DlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         g_valueFont = MakeFont(18, FW_SEMIBOLD, L"Segoe UI");
         g_playFont = MakeFont(14, FW_BOLD, L"Segoe UI");
         g_monoFont = MakeFont(9, FW_NORMAL, L"Consolas");
-        const int owner[] = { IDC_HFR, IDC_QTE, IDC_BLADE, IDC_VERTPLUS, IDC_SUPERSAMPLE, IDC_CH_HEALTH, IDC_CH_FUEL, IDC_CH_ITEMS, IDC_PLAY, IDC_PLAYBIG, IDC_SAVE, IDC_XMIN, IDC_XCLOSE, IDC_PREVIEW, IDC_MUTE,
+        const int owner[] = { IDC_HFR, IDC_QTE, IDC_BLADE, IDC_VERTPLUS, IDC_SUPERSAMPLE, IDC_PSICONS, IDC_CH_HEALTH, IDC_CH_FUEL, IDC_CH_ITEMS, IDC_PLAY, IDC_PLAYBIG, IDC_SAVE, IDC_XMIN, IDC_XCLOSE, IDC_PREVIEW, IDC_MUTE,
                               IDC_PHOTO, IDC_WEAPONSW, IDC_SOUND, IDC_LOGREFRESH, IDC_LOGFOLDER };
         for (int id : owner) SetWindowSubclass(GetDlgItem(dlg, id), HoverProc, 1, 0);
         for (int i = 0; i < PG_COUNT; ++i) SetWindowSubclass(GetDlgItem(dlg, IDC_NAV0 + i), HoverProc, 1, 0);

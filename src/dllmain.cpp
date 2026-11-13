@@ -644,6 +644,7 @@ static void PollPreset()
 static void PhotoTick(float dt);   // photomode.inl
 static void WeaponSwitchTick();    // weaponswitch.inl
 static void CheatTick();           // cheats.inl
+static void TracePads();           // after the .inl includes
 
 // Title screen ("press start"): its alpha movie (movie_ui/Title_Alpha.usm, Raiden's eye glow) only plays
 // correctly at the original frame rate. cTitleStart's update (vtable slot 5) marks the frame unless its
@@ -773,6 +774,7 @@ extern "C" void __cdecl LimiterHook()
     }
     WeaponSwitchTick();
     CheatTick();
+    TracePads();
     TraceState();
     TraceInput();
     UpdateFrameScalars();
@@ -1702,6 +1704,32 @@ static void InstallGekko(const char* ini)
 #include "photomode.inl"
 #include "weaponswitch.inl"
 #include "cheats.inl"
+#include "buttonicons.inl"
+
+// Logs which XInput slots have a controller, at start and whenever that changes (checked every 2 s on
+// the main thread). The game reads pads only through XInput, so a DualSense shows up here only when
+// Steam Input (or DS4Windows) presents it as an Xbox controller.
+static void TracePads()
+{
+    static DWORD last = 0;
+    static int lastMask = -1;
+    const DWORD now = GetTickCount();
+    if (lastMask >= 0 && now - last < 2000) return;
+    last = now;
+    if (!g_xinputGet) {
+        if (HMODULE xi = GetModuleHandleA("XINPUT1_3.dll"))
+            g_xinputGet = reinterpret_cast<XInputGetStateFn>(GetProcAddress(xi, "XInputGetState"));
+        if (!g_xinputGet) return;
+    }
+    int mask = 0;
+    uint8_t state[16];
+    for (DWORD i = 0; i < 4; ++i)
+        if (g_xinputGet(i, state) == ERROR_SUCCESS) mask |= 1 << i;
+    if (mask == lastMask) return;
+    lastMask = mask;
+    if (!mask) Log("Controllers: no XInput controller connected (a DualSense needs Steam Input or DS4Windows).");
+    else Log("Controllers: XInput slots%s%s%s%s connected.", mask & 1 ? " 0" : "", mask & 2 ? " 1" : "", mask & 4 ? " 2" : "", mask & 8 ? " 3" : "");
+}
 
 static void Install()
 {
@@ -1733,6 +1761,7 @@ static void Install()
     InstallPhotoMode(ini);
     InstallWeaponSwitch(ini);
     InstallCheats();
+    InstallButtonIcons(ini);
 
     bool ok = Matches("Limiter", VA_LIMITER, kLimiterOrig, sizeof kLimiterOrig);
     ok &= Matches("Clamp", VA_CLAMP_SITE, kClampOrig, sizeof kClampOrig);

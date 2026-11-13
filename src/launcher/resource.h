@@ -41,7 +41,8 @@
 #define IDC_CH_HEALTH  1053
 #define IDC_CH_FUEL    1054
 #define IDC_CH_ITEMS   1055
-#define IDC_NAV0       1060   // sidebar rows: IDC_NAV0 .. IDC_NAV0 + 6 (Play, Gameplay, Display, Photo Mode, Cheats, Launcher, Log)
+#define IDC_PSICONS    1056
+#define IDC_NAV0       1060   // sidebar rows: IDC_NAV0 .. IDC_NAV0 + 7 (Play, Gameplay, Display, Controller, Photo Mode, Cheats, Launcher, Log)
 #define IDC_PLAYBIG    1070
 #define IDC_SOUND      1071
 #define IDC_LOGVIEW    1072

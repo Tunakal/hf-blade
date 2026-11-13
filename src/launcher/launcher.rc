@@ -28,10 +28,11 @@ BEGIN
     CONTROL         "Play", IDC_NAV0, "Button", BTN, 0, 0, 10, 10
     CONTROL         "Gameplay", IDC_NAV0 + 1, "Button", BTN, 0, 0, 10, 10
     CONTROL         "Display", IDC_NAV0 + 2, "Button", BTN, 0, 0, 10, 10
-    CONTROL         "Photo Mode", IDC_NAV0 + 3, "Button", BTN, 0, 0, 10, 10
-    CONTROL         "Cheats", IDC_NAV0 + 4, "Button", BTN, 0, 0, 10, 10
-    CONTROL         "Launcher", IDC_NAV0 + 5, "Button", BTN, 0, 0, 10, 10
-    CONTROL         "Log", IDC_NAV0 + 6, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Controller", IDC_NAV0 + 3, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Photo Mode", IDC_NAV0 + 4, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Cheats", IDC_NAV0 + 5, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Launcher", IDC_NAV0 + 6, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Log", IDC_NAV0 + 7, "Button", BTN, 0, 0, 10, 10
     CONTROL         "", IDC_MUTE, "Button", BTN, 0, 0, 10, 10
     CONTROL         "", IDC_XMIN, "Button", BS_OWNERDRAW, 0, 0, 10, 10
     CONTROL         "", IDC_XCLOSE, "Button", BS_OWNERDRAW, 0, 0, 10, 10
@@ -50,7 +51,6 @@ BEGIN
     LTEXT           "QTE ease", IDC_L_EASE, 0, 0, 10, 10, LBL
     CONTROL         "", IDC_EASE, TRACKBAR_CLASS, TBS_HORZ | TBS_NOTICKS | WS_TABSTOP, 0, 0, 10, 10
     RTEXT           "60%", IDC_EASEVAL, 0, 0, 10, 10, SS_CENTERIMAGE
-    CONTROL         "Quick weapon switch  (D-pad down)", IDC_WEAPONSW, "Button", BTN, 0, 0, 10, 10
     LTEXT           "Keep pieces of the last", IDC_L_PIECES, 0, 0, 10, 10, LBL
     COMBOBOX        IDC_KEEPCUTS, 0, 0, 10, 10, CB_STYLE
     LTEXT           "Keep bodies of the last", IDC_L_BODIES, 0, 0, 10, 10, LBL
@@ -65,6 +65,10 @@ BEGIN
     COMBOBOX        IDC_SSFACTOR, 0, 0, 10, 10, CB_STYLE
     LTEXT           "", IDC_RESINFO, 0, 0, 10, 10, SS_CENTERIMAGE
     LTEXT           "The mod replaces the game's 1920x1080 option. In the game's graphics settings, pick 1920x1080 and fullscreen; it is then rendered at the size chosen here, with no black bars.", IDC_RESNOTE, 0, 0, 10, 10
+
+    // Controller
+    CONTROL         "PlayStation button icons", IDC_PSICONS, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Quick weapon switch  (D-pad down)", IDC_WEAPONSW, "Button", BTN, 0, 0, 10, 10
 
     // Photo Mode
     CONTROL         "Enable photo mode  (F10 in game)", IDC_PHOTO, "Button", BTN, 0, 0, 10, 10
