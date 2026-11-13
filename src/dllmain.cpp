@@ -1378,10 +1378,13 @@ extern "C" {
     uintptr_t g_vanish0010 = 0, g_vanish0030 = 0;
 }
 
+static int g_keepGekko = 0;   // [Debris] KeepGekko: 0 = GEKKOs (Em0030) explode and vanish as in vanilla
+
 // Returns 1 to skip the vanish call (body is kept), 0 to let it run.
 extern "C" int __cdecl CorpseKeep(uint8_t* obj, int site, int ebxValue)
 {
     const CorpseSite& cs = kCorpseSites[site];
+    if (cs.kind == 1 && !g_keepGekko) return 0;                                          // GEKKO: explode
     if (cs.kind == 0 && (*reinterpret_cast<uint32_t*>(obj + 0xDD4) & 0x100)) return 0;  // special death
     if (cs.kind == 1 && *reinterpret_cast<uint32_t*>(obj + 0xA50) == 0) return 0;        // instant vanish
     if (DebrisIsZandatsuGroup(*reinterpret_cast<uint32_t*>(obj + 0x83C))) return 0;      // zandatsu target
@@ -1580,8 +1583,47 @@ static void InstallCorpses(const char* ini)
     g_vanish0010 = VA_VANISH_0010 + g_delta;
     g_vanish0030 = VA_VANISH_0030 + g_delta;
     for (size_t i = 0; i < _countof(kCorpseSites); ++i) WriteCall(kCorpseSites[i].va, reinterpret_cast<const void*>(kCorpseStubs[i]), 5);
-    Log("Corpses: keeping the last %d enemy bodies (Em0010, Em0030; %u vanish calls).", g_keepCorpses, (unsigned)_countof(kCorpseSites));
+    Log("Corpses: keeping the last %d enemy bodies (Em0010, Em0030 GEKKO only with KeepGekko=1; %u vanish calls).", g_keepCorpses, (unsigned)_countof(kCorpseSites));
     UnblockDebrisObjectives();
+}
+
+// GEKKO (Em0030, "em0030_gekko") is large: cut into many pieces it costs frame time, and the
+// pieces block the way. Unless [Debris] KeepGekko=1, its vanish (end of the death animation, where
+// it explodes) first drops its debris group from the kept cuts, as for a zandatsu target, so its
+// pieces explode with it as in vanilla. Entry detour of 0xb67710: FLDZ; PUSH ESI; SUB ESP,8.
+static const uint8_t kVanish0030Orig[] = { 0xD9, 0xEE, 0x56, 0x83, 0xEC, 0x08 };
+extern "C" {
+    uintptr_t g_vanish0030Resume = 0;
+    void __cdecl GekkoVanish(uint8_t* obj) { DebrisNoteZandatsu(*reinterpret_cast<uint32_t*>(obj + 0x83C)); }
+}
+extern "C" __declspec(naked) void GekkoVanishHook()
+{
+    __asm {
+        push  ecx
+        push  edx
+        push  ecx
+        call  GekkoVanish
+        add   esp, 4
+        pop   edx
+        pop   ecx
+        fldz
+        push  esi
+        sub   esp, 8
+        jmp   dword ptr [g_vanish0030Resume]
+    }
+}
+
+static void InstallGekko(const char* ini)
+{
+    g_keepGekko = GetPrivateProfileIntA("Debris", "KeepGekko", cfg::kKeepGekko, ini);
+    if (g_keepGekko || g_keepCuts <= 0) return;   // corpses alone: CorpseKeep already lets GEKKOs vanish
+    if (!Matches("Vanish0030", VA_VANISH_0030, kVanish0030Orig, sizeof kVanish0030Orig)) {
+        Log("GEKKO: signature mismatch; their pieces are kept like others.");
+        return;
+    }
+    g_vanish0030Resume = VA_VANISH_0030 + g_delta + sizeof kVanish0030Orig;
+    WriteJmp(VA_VANISH_0030, &GekkoVanishHook, sizeof kVanish0030Orig);
+    Log("GEKKO: bodies and pieces explode as in vanilla (KeepGekko=0).");
 }
 
 #include "photomode.inl"
@@ -1612,6 +1654,7 @@ static void Install()
     InstallVertPlus();
     InstallDebris(ini);
     InstallCorpses(ini);
+    InstallGekko(ini);
     InstallPhotoMode(ini);
     InstallWeaponSwitch(ini);
 

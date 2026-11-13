@@ -62,6 +62,7 @@ SITES = {"Limiter": (0xF98070, bytes.fromhex("558BEC83E4F8")),
          "UiExec": (0xF9AE76, bytes.fromhex("8B480C8B4008")),
          "EmSetDebrisGate": (0xCA7BFB, bytes.fromhex("395C2414750F")),
          "ZanRegister": (0x941450, bytes.fromhex("5153555657 8D6950".replace(" ", ""))),
+         "Vanish0030": (0xB67710, bytes.fromhex("D9EE5683EC08")),
          "SndPost": (0xE5E050, bytes.fromhex("83EC0C8B4424108B4C2414")),
          "SndPostBgm": (0xE5E1B0, bytes.fromhex("8B442404566A0050E8"))}
 RATE_CALLS = (0x5CC9B8, 0x5CD009, 0x5CD063, 0x5CD1DE, 0x5CD35E, 0x5CD4DF, 0x5CD64E, 0x5CD7CE, 0x5CDDE8,

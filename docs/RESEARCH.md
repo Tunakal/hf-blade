@@ -455,6 +455,16 @@ zandatsu the grabbed enemy's pieces hung in the air.
 - **Patch:** an entry detour at `0x00941450` (`51 53 55 56 57 8D 69 50`) records those group ids.
   Pieces and bodies of a recorded group are no longer kept, so they vanish as in vanilla.
 
+**GEKKO** (2026-11-13, player request)
+- Em0030 is the GEKKO (the exe has the string `em0030_gekko`). It is large: cut, it breaks into many
+  pieces, which cost frame rate and block the way when kept.
+- Its death handler `0x00b6cfb0` calls vanish `0x00b67710` when the death animation ends; vanish plays
+  the explosion and deletes the enemy's debris groups through `0x00940450`.
+- `[Debris] KeepGekko=0` (default): CorpseKeep lets Em0030 vanish, and an entry detour at `0x00b67710`
+  (`D9 EE 56 83 EC 08`) records the GEKKO's group `[+0x83C]` like a zandatsu group first, so its kept
+  pieces are released and explode with it.
+- Not covered: the DLC/VR clones Em8030 and Emc030 have their own vanish functions.
+
 ## 16. Photo mode (static, delegated; hook bytes verified by me)
 
 Fuller notes are in `evidence/photo_*.md`.

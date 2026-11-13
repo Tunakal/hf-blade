@@ -30,6 +30,7 @@ static const int kHeight       = 1200;  // [Display] Height (0 = off; older conf
 static const int kVertPlusFov  = 1;     // [Display] VertPlusFov
 static const int kKeepLastCuts = 2;     // [Debris] KeepLastCuts, 0 = off, max 8
 static const int kKeepCorpses  = 3;     // [Debris] KeepCorpses, 0 = off, max 8
+static const int kKeepGekko    = 0;     // [Debris] KeepGekko: 1 = keep GEKKO bodies and pieces too
 static const int kLogDebris    = 0;     // [Debris] LogDebris
 static const int kPhotoMode    = 1;     // [PhotoMode] Enabled
 static const int kPhotoKey     = 0x79;  // [PhotoMode] Key, F10
