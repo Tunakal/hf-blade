@@ -66,7 +66,7 @@ BEGIN
     CONTROL         "Enable photo mode  (F10 in game)", IDC_PHOTO, "Button", BTN, 0, 0, 10, 10
     LTEXT           "CONTROLLER\n\nLeft stick\nRight stick\nLT / RT\nLB / RB\nD-pad up / down\nL3 (hold)\nY\nX", IDC_PHOTOPAD, 0, 0, 10, 10, SS_NOPREFIX
     LTEXT           "\n\nmove\nlook\ndown / up\nroll\nzoom in / out\nfaster\nreset\nHUD on / off", IDC_PHOTOPAD2, 0, 0, 10, 10, SS_NOPREFIX
-    LTEXT           "KEYBOARD\n\nW A S D\nMouse / arrows\nCtrl / Space\nQ / E\nZ / X\nShift / Alt\nR\nH", IDC_PHOTOKB, 0, 0, 10, 10, SS_NOPREFIX
+    LTEXT           "KEYBOARD\n\nW A S D\nArrow keys\nCtrl / Space\nQ / E\nZ / X\nShift / Alt\nR\nH", IDC_PHOTOKB, 0, 0, 10, 10, SS_NOPREFIX
     LTEXT           "\n\nmove\nlook\ndown / up\nroll\nzoom in / out\nfaster / slower\nreset\nHUD on / off", IDC_PHOTOKB2, 0, 0, 10, 10, SS_NOPREFIX
 
     // Launcher

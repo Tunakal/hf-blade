@@ -113,7 +113,7 @@ you stopped.
 | --- | --- | --- |
 | Move | Left stick | W A S D |
 | Up / down | RT / LT | Space / Ctrl |
-| Look | Right stick | Mouse or arrow keys |
+| Look | Right stick | Arrow keys (mouse look does not work yet) |
 | Roll | LB / RB | Q / E |
 | Zoom (FOV) | D-pad up / down | Z / X or Page Up / Page Down |
 | Faster / slower | L3 (faster) | Shift (faster) / Alt (slower) |

@@ -496,8 +496,17 @@ Fuller notes are in `evidence/photo_*.md`.
 
 **HUD**
 - The render-queue executor `0x00f9ae10` runs on the render job. At `0x00f9ae76`
-  (`8B 48 0C 8B 40 08`) a stub skips the phase-1 draw items of UI layers 0x3e, 0x60, 0x61, 0x67 and
-  0x69. Begin and end callbacks still run.
+  (`8B 48 0C 8B 40 08`) a stub skips the phase-1 draw items of UI layers 0x3e, 0x60, 0x61, 0x66, 0x67
+  and 0x69. Begin and end callbacks still run.
+- Layer 0x66 holds the map/objective marker. It was found in game on 2026-11-13 with the layer hunt
+  (M / N in photo mode), which hides one more layer that drew while the HUD was hidden and logs each step.
+  `[PhotoMode] HideLayers` adds more layers without a rebuild.
+- Mouse look is not working yet. The first method (cursor delta, re-centred every frame) made the camera
+  jump: the game also moves and clips the cursor. The second (raw input, `RIDEV_INPUTSINK` on a
+  message-only window in its own thread) receives no motion in game (test 2026-11-13). A likely cause is
+  that DirectInput 8 registers raw mouse input for the same process, and a process has only one target
+  window per device type. Next step: read the game's own DirectInput mouse state instead (the mod is the
+  dinput8 proxy), or look at how other free cameras do it.
 - World layers, post effects and fades (0x65, 0x68) are untouched.
 
 **Audio** (added after the first photo-mode test)

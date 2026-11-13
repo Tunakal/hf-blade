@@ -65,7 +65,8 @@ extern "C" {
     uintptr_t g_viewBuildAddr = 0;
     volatile LONG g_photoBlockInput = 0;    // read by the pad gate (logic thread)
     volatile LONG g_photoHideUi = 0;        // read by the UI executor (render thread)
-    uint32_t  g_uiLayerMask[4] = { 0, 0x40000000u, 0, 0x283u };   // layers 0x3e, 0x60, 0x61, 0x67, 0x69
+    uint32_t  g_uiLayerMask[4] = { 0, 0x40000000u, 0, 0x2C3u };   // layers 0x3e, 0x60, 0x61, 0x66 (map marker), 0x67, 0x69
+    uint32_t  g_uiLayerSeen[4] = {};        // layers that queued draw items while the HUD was hidden
     uintptr_t g_uiExecCont = 0, g_uiExecSkip = 0;
 }
 
@@ -76,8 +77,40 @@ static struct {
     float yaw = 0, pitch = 0, roll = 0, fov = 0;
     uint32_t savedWorldBit = 0;
     int releaseWait = 0;
-    POINT center = {};
+    int huntLayer = -1;                     // [ / ] layer hunt: extra layer hidden for testing
+    bool huntPrev = false, huntNext = false;
 } g_pm;
+
+// Mouse look uses raw input on a message-only window of our own thread: relative motion straight
+// from the device, so it does not fight the game, which moves and clips the cursor itself.
+static volatile LONG g_rawDx = 0, g_rawDy = 0;
+static LRESULT CALLBACK RawMouseProc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    if (m == WM_INPUT) {
+        RAWINPUT ri; UINT size = sizeof ri;
+        if (GetRawInputData(reinterpret_cast<HRAWINPUT>(l), RID_INPUT, &ri, &size, sizeof(RAWINPUTHEADER)) != (UINT)-1 &&
+            ri.header.dwType == RIM_TYPEMOUSE && !(ri.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)) {
+            InterlockedExchangeAdd(&g_rawDx, ri.data.mouse.lLastX);
+            InterlockedExchangeAdd(&g_rawDy, ri.data.mouse.lLastY);
+        }
+    }
+    return DefWindowProcW(h, m, w, l);
+}
+static DWORD WINAPI RawMouseThread(void*)
+{
+    WNDCLASSW wc = {};
+    wc.lpfnWndProc = RawMouseProc;
+    wc.hInstance = GetModuleHandleW(nullptr);
+    wc.lpszClassName = L"HFBladeRawMouse";
+    RegisterClassW(&wc);
+    HWND w = CreateWindowExW(0, wc.lpszClassName, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, wc.hInstance, nullptr);
+    RAWINPUTDEVICE d = { 0x01, 0x02, RIDEV_INPUTSINK, w };   // generic desktop / mouse
+    if (!w || !RegisterRawInputDevices(&d, 1, sizeof d)) { Log("Photo mode: raw mouse unavailable (%lu).", GetLastError()); return 0; }
+    MSG msg;
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) DispatchMessageW(&msg);
+    return 0;
+}
+
 
 typedef DWORD (WINAPI* XInputGetStateFn)(DWORD, void*);
 static XInputGetStateFn g_xinputGet = nullptr;
@@ -149,6 +182,7 @@ extern "C" __declspec(naked) void PhotoUiExecHook()
         and   ecx, 7
         cmp   ecx, 1                 // only the draw items; begin/end callbacks still run
         jne   orig
+        bts   dword ptr [g_uiLayerSeen], edx
         bt    dword ptr [g_uiLayerMask], edx
         jc    skip
     orig:
@@ -198,7 +232,9 @@ static void PhotoEnter()
     g_photoHideUi = 1;
     g_photoActive = 1;
     PhotoAudio(true);
-    GetCursorPos(&g_pm.center);
+    InterlockedExchange(&g_rawDx, 0);
+    InterlockedExchange(&g_rawDy, 0);
+    memset(g_uiLayerSeen, 0, sizeof g_uiLayerSeen);
     Log("photo mode: on (eye %.2f %.2f %.2f, fov %.3f)", g_pm.eye.x, g_pm.eye.y, g_pm.eye.z, g_pm.fov);
 }
 
@@ -207,6 +243,10 @@ static void PhotoExit()
     g_photoActive = 0;
     g_photoRestoreFov = 1;
     g_photoHideUi = 0;
+    if (g_pm.huntLayer >= 0) {   // undo the layer-hunt test bit
+        g_uiLayerMask[g_pm.huntLayer >> 5] &= ~(1u << (g_pm.huntLayer & 31));
+        g_pm.huntLayer = -1;
+    }
     uint32_t* flags = At<uint32_t>(VA_WORLD_FLAGS);
     *flags = (*flags & ~0x80000000u) | g_pm.savedWorldBit;
     g_pm.on = false;
@@ -245,6 +285,26 @@ static void PhotoTick(float dt)
     g_pm.padToggleDown = xBtn;
     g_photoHideUi = g_pm.hud ? 0 : 1;
 
+    // Layer hunt (N / M): hide one more of the layers seen drawing while the HUD is hidden, to find
+    // the layer of a HUD element that stays visible. Each step is logged.
+    const bool prevK = fg && KeyDown('N'), nextK = fg && KeyDown('M');
+    if ((prevK && !g_pm.huntPrev) || (nextK && !g_pm.huntNext)) {
+        if (g_pm.huntLayer >= 0) g_uiLayerMask[g_pm.huntLayer >> 5] &= ~(1u << (g_pm.huntLayer & 31));
+        int l = g_pm.huntLayer;
+        for (int i = 0; i < 128; i++) {
+            l = nextK ? (l + 1) & 127 : (l + 127) & 127;
+            const bool seen = (g_uiLayerSeen[l >> 5] >> (l & 31)) & 1;
+            const bool hidden = (g_uiLayerMask[l >> 5] >> (l & 31)) & 1;
+            if (seen && !hidden) break;
+            if (i == 127) l = -1;
+        }
+        g_pm.huntLayer = l;
+        if (l >= 0) g_uiLayerMask[l >> 5] |= 1u << (l & 31);
+        Log("photo mode: layer hunt: also hiding layer 0x%02X", l < 0 ? 0 : l);
+    }
+    g_pm.huntPrev = prevK;
+    g_pm.huntNext = nextK;
+
     float mx = 0, mz = 0, my = 0, look_x = 0, look_y = 0, roll = 0, zoom = 0;
     bool fast = false, slow = false;
     if (padOk) {
@@ -276,11 +336,12 @@ static void PhotoTick(float dt)
         if (KeyDown(VK_SHIFT)) fast = true;
         if (KeyDown(VK_MENU)) slow = true;
         if (KeyDown('R')) { g_pm.roll = 0; g_pm.fov = g_photoSavedFov > 0.1f ? g_photoSavedFov : g_pm.fov; }
-        POINT p;   // mouse look: cursor delta, re-centred every frame
-        if (GetCursorPos(&p)) {
-            g_pm.yaw -= (p.x - g_pm.center.x) * 0.0025f;
-            g_pm.pitch -= (p.y - g_pm.center.y) * 0.0025f;
-            SetCursorPos(g_pm.center.x, g_pm.center.y);
+    }
+    {   // mouse look: raw motion since the last frame (consumed even when unfocused)
+        const LONG dx = InterlockedExchange(&g_rawDx, 0), dy = InterlockedExchange(&g_rawDy, 0);
+        if (fg) {
+            g_pm.yaw -= dx * 0.0025f * (g_pm.fov / 0.8727f);   // slower when zoomed in
+            g_pm.pitch -= dy * 0.0025f * (g_pm.fov / 0.8727f);
         }
     }
     const float lookRate = 1.8f;   // rad/s at full stick
@@ -334,5 +395,13 @@ static void InstallPhotoMode(const char* ini)
     WriteCall(VA_VIEW_CALL, &PhotoViewHook, 5);
     WriteCall(VA_PAD_GATE_CALL, &PhotoBlockInput, 5);
     WriteJmp(VA_UI_EXEC, &PhotoUiExecHook, sizeof kUiExecOrig);
+    char extra[128];   // [PhotoMode] HideLayers: more UI layers to hide, hex, comma separated
+    GetPrivateProfileStringA("PhotoMode", "HideLayers", "", extra, sizeof extra, ini);
+    char* ctx = nullptr;
+    for (char* t = strtok_s(extra, ", ", &ctx); t; t = strtok_s(nullptr, ", ", &ctx)) {
+        const unsigned long l = strtoul(t, nullptr, 16);
+        if (l < 128) { g_uiLayerMask[l >> 5] |= 1u << (l & 31); Log("Photo mode: also hiding UI layer 0x%02lX.", l); }
+    }
+    if (HANDLE t = CreateThread(nullptr, 0, RawMouseThread, nullptr, 0, nullptr)) CloseHandle(t);
     Log("Photo mode: ready (key 0x%02X, gamepad %s).", g_photoKey, g_xinputGet ? "yes" : "no");
 }
