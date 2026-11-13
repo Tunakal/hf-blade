@@ -39,12 +39,22 @@ The mod is a `dinput8.dll` proxy. It loads alongside dgVoodoo and ReShade withou
    - On ultrawide the 2D HUD is stretched horizontally. A centred 16:9 HUD is planned.
    - Ultrawide is untested in game.
 4. **Persistent debris and bodies.** The pieces of your last cuts and the bodies of the last killed
-   enemies stay on the ground instead of exploding and vanishing.
+   enemies stay on the ground instead of exploding and vanishing. GEKKOs still explode as in the
+   original game, because their many large pieces cost frame rate and block the way (`KeepGekko`).
 5. **Photo mode (F10).** Freezes the game, hides the HUD and gives you a free camera. See
    [Photo mode](#photo-mode) below.
 6. **Quick weapon switch (D-pad down).** Switches the unique (heavy attack) weapon to the next one you
    own, without opening the weapon menu (`[WeaponSwitch]`; the button and an optional keyboard key are
    configurable).
+7. **Timing fixes above 60 fps.** Systems that count frames are brought back to real time:
+   - the right-stick camera turns at the same speed at any frame rate (`CameraTurnFix`);
+   - button-mash QTEs (including Sundowner's shield), Blade Mode slow motion and the Blade Mode energy
+     drain (`[Fixes]`); `QteEase` (default 60%) also makes mash gauges drain slower;
+   - particle effects such as blood on the floor update at 60 Hz with the right time step, so they last
+     as long as in the original game (`EffectTimingFix`);
+   - menu auto-repeat runs at the original rate, so one press moves one step;
+   - frame time is measured with a double-precision timer, so long sessions do not jitter
+     (`PreciseFrameTime`).
 
 The mod checks the exe's PE timestamp and the bytes at each patch site before changing anything. If
 any check fails it applies no patches and writes the reason to `hfblade.log`. Patches live only in
@@ -137,23 +147,15 @@ The launcher's Photo Mode page shows the same controls.
 - **Antivirus:** some antivirus products quarantine the `dinput8.dll` proxy as a heuristic false
   positive, because it loads into the game and patches its memory. Kaspersky has been seen doing this.
   Build it from source if you prefer, and add an exclusion for the game folder.
-- The right-stick camera turns at the same speed at any frame rate (`CameraTurnFix`).
-- Button-mash QTEs, Blade Mode slow motion and the Blade Mode energy drain are scaled to real time
-  (`[Fixes]`). This includes Sundowner's shield QTE.
-- Some particle effects (for example blood on the floor) count frames, so above 60 fps they used to
-  vanish too early. With `EffectTimingFix` (default on) effects update at 60 Hz with the right time
-  step, so they last as long as in the original game. `QteEase` (default 60%) also makes mash gauges drain slower at high fps.
-  If a QTE still fails, press **F9** to switch to the original 60 fps, then press F9 again to switch
-  back.
+- If a QTE still fails at a high frame rate, press **F9** to switch to the original 60 fps, then press
+  F9 again to switch back.
 - Timed hit-stop and short slow-motion effects still last half as long at 120 fps.
 - Quick weapon switch: switching while L'Étranger (polearm) is still in Raiden's hand after a Y attack
   crashes the game. Switch to the sword (X) first. Other boss weapons are fine.
-- Menu auto-repeat (holding a direction) runs faster at high frame rates.
 - Controller rumble is shorter, because its timer counts frames.
 - Other game systems that ignore the frame multiplier may also run at the wrong speed. See the
   checklist in [docs/RESEARCH.md](docs/RESEARCH.md).
-- The engine measures frame time as float milliseconds since startup. In long sessions the precision
-  drops, so the multiplier may jitter at high frame rates.
+- Photo mode: mouse look does not work yet; use the arrow keys or the right stick.
 
 ## Legal
 
