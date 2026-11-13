@@ -954,7 +954,7 @@ static unsigned g_soundSeed = 1;
 static REAL SoundRand() { g_soundSeed = g_soundSeed * 1664525u + 1013904223u; return REAL((g_soundSeed >> 8) & 0xFFFF) / 65535.0f; }
 static REAL Lerp(REAL a, REAL b, REAL t) { return a + (b - a) * t; }
 static Intro g_intro;
-static DWORD IntroDuration(int mode) { return mode == 2 ? 1750 : 650; }
+static DWORD IntroDuration(int mode) { return mode == 2 ? 1545 : 650; }
 
 static REAL Clamp01(REAL v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 static REAL EaseOut(REAL t) { const REAL u = 1 - t; return 1 - u * u * u; }
@@ -1093,16 +1093,21 @@ static void DrawEmbers(Graphics& g, PointF A, PointF B, REAL age, unsigned seed,
 
 // The flurry's small cuts: deterministic, so the renderer and the sound scheduler agree.
 // Each cut is a full line across the window (window-local coordinates, clipped to its edges).
-static const int kFlurryCuts = 12;
-static const REAL kFlurryBigAt = 820;   // ms
+static const int kFlurryCuts = 6;
+static const REAL kFlurryBigAt = 615;   // ms (the small-cut phase is 3/4 of the old 820 ms)
 struct FlurryCut { REAL born, scale, pan; PointF a, b; };
 
 static FlurryCut GetFlurryCut(int i, REAL W, REAL H)
 {
     Rng r = { 424242u + 7919u * unsigned(i) };
     FlurryCut fc;
-    fc.born = 40 + i * 58 + r.Next() * 20;
-    const REAL cx = W * (0.15f + 0.70f * r.Next()), cy = H * (0.15f + 0.70f * r.Next());
+    fc.born = 40 + i * 90 + r.Next() * 20;
+    // Spread the cuts over the whole window: each one gets its own cell of a 3 x 2 grid (in a
+    // shuffled order, so consecutive cuts jump around), with a random spot inside that cell.
+    static const int kCell[6] = { 0, 4, 2, 3, 1, 5 };
+    const int cell = kCell[i % 6], col = cell % 3, row = cell / 3;
+    const REAL cx = W * (0.22f + 0.74f * (col + 0.2f + 0.6f * r.Next()) / 3);   // biased right
+    const REAL cy = H * (0.12f + 0.76f * (row + 0.2f + 0.6f * r.Next()) / 2);
     const REAL ang = (0.25f + 0.9f * r.Next()) * (i % 2 ? 1.0f : -1.0f) + (r.Next() < 0.2f ? 1.5708f : 0.0f);
     fc.scale = 0.45f + 0.35f * r.Next();
     fc.pan = cx / W * 2 - 1;

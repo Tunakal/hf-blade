@@ -721,6 +721,21 @@ Reported 2026-11-12: the right-stick camera turned faster the higher the frame r
 - **Unverified:** whether mouse look also goes through the stick path. If it does not, mouse speed is
   unaffected.
 
+## Goals (player list, 2026-11-12/13)
+
+Done or mostly done: resolution and wide screen, quick boss-weapon switch, up to 360 Hz, photo mode.
+Open: HUD minimization options, cutscene upscale, persistent blood, mouse look in photo mode,
+L'Etranger switch crash, and (added 2026-11-13) **frame generation, DLSS and FSR**.
+
+Notes on the upscalers and frame generation (research not started; to check before any work):
+- The game renders with Direct3D 9. DLSS, FSR 2/3, XeSS and their frame generation need D3D11/12 or
+  Vulkan, plus per-pixel motion vectors, depth and a jittered projection.
+- A likely route is a translation layer (DXVK to Vulkan, or a D3D9-to-D3D12 wrapper) with an
+  upscaler injector on top. The game's motion blur may already produce a velocity buffer; that is unverified.
+- FSR 1 (spatial, no motion vectors) only needs a post-process pass and is the easiest first step.
+- Driver-level frame generation (AMD AFMF, NVIDIA Smooth Motion) and Lossless Scaling work on any
+  game, without the mod.
+
 ## Next steps
 
 1. In-game test checklist. Every 600 frames, check `hfblade.log` for `mult≈0.5` at 120 fps.
