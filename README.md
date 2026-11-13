@@ -2,16 +2,18 @@
 
 An open-source enhancement mod for *METAL GEAR RISING: REVENGEANCE* (PC, Steam). The goal is a
 remaster-like experience:
-- high frame rate (60–360 fps) with real-time gameplay, QTE and Blade Mode timing;
-- 16:10, wide and ultrawide with an aspect-correct FOV;
+- high frame rate (60–360 fps) with real-time gameplay, QTE, Blade Mode, camera and menu timing;
+- 16:10, wide and ultrawide with an aspect-correct FOV, and optional supersampling;
 - persistent cut debris and enemy bodies;
 - a photo mode (freeze, free camera, hidden HUD);
+- a quick boss-weapon switch on the D-pad;
+- optional cheats (infinite health, fuel cells and repair items), switchable while you play;
 - a settings launcher.
 
-> Status: **work in progress.** Confirmed in game: 120 fps, the unlocked menus, 16:10, the
-> Sundowner shield QTE, persistent bodies and debris (including objective progress and zandatsu),
-> and the photo mode (freeze, free camera, hidden HUD, paused audio). Ultrawide and frame rates other
-> than 120 are untested. Keep a backup of your save.
+> Status: **work in progress.** Confirmed in game: 120 and 360 fps, the unlocked menus, 16:10,
+> supersampling, the Sundowner shield QTE, persistent bodies and debris (including objective progress
+> and zandatsu), the photo mode (freeze, free camera, hidden HUD, paused audio), the boss-weapon
+> switch and the cheats. Ultrawide is untested. Keep a backup of your save.
 
 ## Why the game breaks above 60 fps
 
