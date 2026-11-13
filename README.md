@@ -48,7 +48,7 @@ The mod is a `dinput8.dll` proxy. It loads alongside dgVoodoo and ReShade withou
    configurable).
 7. **Cheats (off by default).** Infinite health, infinite fuel cells, and Repair Units and Electrolyte
    packs that are not used up (`[Cheats]`, launcher page "Cheats"). Saving in the launcher switches
-   them on or off in the running game within about a second.
+   them on or off in the running game within about a second. See [Cheats](#cheats) below.
 8. **Timing fixes above 60 fps.** Systems that count frames are brought back to real time:
    - the right-stick camera turns at the same speed at any frame rate (`CameraTurnFix`);
    - button-mash QTEs (including Sundowner's shield), Blade Mode slow motion and the Blade Mode energy
@@ -145,6 +145,23 @@ Settings in `hfblade.ini` under `[PhotoMode]`:
 - `PauseAudio` (default 1).
 
 The launcher's Photo Mode page shows the same controls.
+
+## Cheats
+
+All cheats are off by default. Turn them on in the launcher's **Cheats** page and press **Save**.
+The mod checks `hfblade.ini` about once a second, so a change applies to the running game without a
+restart. Turned off, a cheat stops at once: nothing is topped up any more and items are used up again.
+The mod never writes to your save; the game only saves what Raiden actually holds.
+
+| Cheat | What it does | `[Cheats]` key |
+| --- | --- | --- |
+| Infinite health | Health is kept full. Hits that kill outright (falling off the map, scripted deaths) still kill. | `InfiniteHealth` |
+| Infinite fuel cells | The fuel cells (Blade Mode and Ripper Mode energy) are kept full. | `InfiniteFuelCells` |
+| Infinite repair items | Repair Units (health) and Electrolyte packs (fuel cells) are not used up. You need at least one to use it. | `InfiniteRepairItems` |
+
+The Play page summary shows **Cheats: On** in yellow while any cheat is on. Each change is logged in
+`hfblade.log` (for example `Cheats: health on, fuel cells off, repair items off.`).
+Only tested with Raiden in the main story; the DLC characters are untested.
 
 ## Known issues / open questions
 
