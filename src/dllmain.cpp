@@ -643,6 +643,7 @@ static void PollPreset()
 
 static void PhotoTick(float dt);   // photomode.inl
 static void WeaponSwitchTick();    // weaponswitch.inl
+static void CheatTick();           // cheats.inl
 
 // Title screen ("press start"): its alpha movie (movie_ui/Title_Alpha.usm, Raiden's eye glow) only plays
 // correctly at the original frame rate. cTitleStart's update (vtable slot 5) marks the frame unless its
@@ -771,6 +772,7 @@ extern "C" void __cdecl LimiterHook()
         PhotoTick(dt);
     }
     WeaponSwitchTick();
+    CheatTick();
     TraceState();
     TraceInput();
     UpdateFrameScalars();
@@ -1699,6 +1701,7 @@ static void InstallGekko(const char* ini)
 
 #include "photomode.inl"
 #include "weaponswitch.inl"
+#include "cheats.inl"
 
 static void Install()
 {
@@ -1729,6 +1732,7 @@ static void Install()
     InstallInputRepeat();
     InstallPhotoMode(ini);
     InstallWeaponSwitch(ini);
+    InstallCheats();
 
     bool ok = Matches("Limiter", VA_LIMITER, kLimiterOrig, sizeof kLimiterOrig);
     ok &= Matches("Clamp", VA_CLAMP_SITE, kClampOrig, sizeof kClampOrig);

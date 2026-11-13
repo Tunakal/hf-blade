@@ -46,7 +46,10 @@ The mod is a `dinput8.dll` proxy. It loads alongside dgVoodoo and ReShade withou
 6. **Quick weapon switch (D-pad down).** Switches the unique (heavy attack) weapon to the next one you
    own, without opening the weapon menu (`[WeaponSwitch]`; the button and an optional keyboard key are
    configurable).
-7. **Timing fixes above 60 fps.** Systems that count frames are brought back to real time:
+7. **Cheats (off by default).** Infinite health, infinite fuel cells, and Repair Units and Electrolyte
+   packs that are not used up (`[Cheats]`, launcher page "Cheats"). Saving in the launcher switches
+   them on or off in the running game within about a second.
+8. **Timing fixes above 60 fps.** Systems that count frames are brought back to real time:
    - the right-stick camera turns at the same speed at any frame rate (`CameraTurnFix`);
    - button-mash QTEs (including Sundowner's shield), Blade Mode slow motion and the Blade Mode energy
      drain (`[Fixes]`); `QteEase` (default 60%) also makes mash gauges drain slower;
@@ -90,6 +93,7 @@ automatically on first start.
     screen, for a cleaner image. The driver option must be on. It can lower fps a lot (in one test, 2.25x
     on a laptop RTX 5070 Ti went from about 200 to 110 fps).
   - **Photo Mode:** the controls;
+  - **Cheats:** infinite health, fuel cells and repair items;
   - **Launcher:** opening animation and sound;
   - **Log:** the last lines of `hfblade.log`.
 

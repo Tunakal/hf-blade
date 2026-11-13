@@ -29,8 +29,9 @@ BEGIN
     CONTROL         "Gameplay", IDC_NAV0 + 1, "Button", BTN, 0, 0, 10, 10
     CONTROL         "Display", IDC_NAV0 + 2, "Button", BTN, 0, 0, 10, 10
     CONTROL         "Photo Mode", IDC_NAV0 + 3, "Button", BTN, 0, 0, 10, 10
-    CONTROL         "Launcher", IDC_NAV0 + 4, "Button", BTN, 0, 0, 10, 10
-    CONTROL         "Log", IDC_NAV0 + 5, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Cheats", IDC_NAV0 + 4, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Launcher", IDC_NAV0 + 5, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Log", IDC_NAV0 + 6, "Button", BTN, 0, 0, 10, 10
     CONTROL         "", IDC_MUTE, "Button", BTN, 0, 0, 10, 10
     CONTROL         "", IDC_XMIN, "Button", BS_OWNERDRAW, 0, 0, 10, 10
     CONTROL         "", IDC_XCLOSE, "Button", BS_OWNERDRAW, 0, 0, 10, 10
@@ -71,6 +72,11 @@ BEGIN
     LTEXT           "\n\nmove\nlook\ndown / up\nroll\nzoom in / out\nfaster\nreset\nHUD on / off", IDC_PHOTOPAD2, 0, 0, 10, 10, SS_NOPREFIX
     LTEXT           "KEYBOARD\n\nW A S D\nArrow keys\nCtrl / Space\nQ / E\nZ / X\nShift / Alt\nR\nH", IDC_PHOTOKB, 0, 0, 10, 10, SS_NOPREFIX
     LTEXT           "\n\nmove\nlook\ndown / up\nroll\nzoom in / out\nfaster / slower\nreset\nHUD on / off", IDC_PHOTOKB2, 0, 0, 10, 10, SS_NOPREFIX
+
+    // Cheats
+    CONTROL         "Infinite health", IDC_CH_HEALTH, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Infinite fuel cells", IDC_CH_FUEL, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Infinite Repair Units and Electrolyte packs", IDC_CH_ITEMS, "Button", BTN, 0, 0, 10, 10
 
     // Launcher
     LTEXT           "Opening animation", IDC_L_INTRO, 0, 0, 10, 10, LBL

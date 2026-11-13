@@ -59,8 +59,8 @@ static Color C(COLORREF c, BYTE a = 255) { return Color(a, GetRValue(c), GetGVal
 // ---------------------------------------------------------------------------
 static const int kWinW = 1000, kWinH = 740, kSideW = 220, kPadX = 24, kBarH = 56;
 
-enum { PG_PLAY, PG_GAME, PG_DISP, PG_PHOTO, PG_LAUNCH, PG_LOG, PG_COUNT };
-static const wchar_t* const kPageNames[PG_COUNT] = { L"Play", L"Gameplay", L"Display", L"Photo Mode", L"Launcher", L"Log" };
+enum { PG_PLAY, PG_GAME, PG_DISP, PG_PHOTO, PG_CHEAT, PG_LAUNCH, PG_LOG, PG_COUNT };
+static const wchar_t* const kPageNames[PG_COUNT] = { L"Play", L"Gameplay", L"Display", L"Photo Mode", L"Cheats", L"Launcher", L"Log" };
 
 static float g_scale = 1.0f;
 static int S(int v) { return (int)floorf(float(v) * g_scale + 0.5f); }
@@ -188,6 +188,9 @@ static const Tip kTips[] = {
     { IDC_RES, IDC_L_RES, L"The size the game renders at when '1920x1080' is selected in its own options. Pick your screen's resolution for a sharp, full-screen picture." },
     { IDC_SUPERSAMPLE, 0, L"Renders the game larger than the render size and lets the graphics driver shrink it to your screen: a cleaner, less jagged image. It can lower fps a lot (in one test, 2.25x took a laptop RTX 5070 Ti from about 200 to 110 fps). Needs an NVIDIA or AMD graphics card: turn on NVIDIA DLDSR or AMD VSR in the driver first." },
     { IDC_SSFACTOR, IDC_L_SSFACTOR, L"How much larger the game renders. These are the NVIDIA DLDSR factors: 2.25x gives the cleanest image, 1.78x costs less frame rate." },
+    { IDC_CH_HEALTH, 0, L"Raiden's health is kept full. Hits that kill outright, such as falling off the map, still kill." },
+    { IDC_CH_FUEL, 0, L"The fuel cells (Blade Mode and Ripper Mode energy) are kept full." },
+    { IDC_CH_ITEMS, 0, L"Repair Units (health) and Electrolyte packs (fuel cells) are not used up when you use them. Turned off, they are used up again." },
     { IDC_VERTPLUS, 0, L"Keeps the picture from looking zoomed in on screens that are not 16:9: taller screens get more view above and below, wider screens more at the sides. Also keeps the 3D HUD layer at the right size." },
     { IDC_PHOTO, 0, L"In game, F10 freezes everything, hides the HUD and lets you fly the camera to take screenshots (PrtSc with ReShade, F12 with Steam). F10 again resumes the game where it stopped." },
     { IDC_SAVE, 0, L"Save the settings to hfblade.ini." },
@@ -363,6 +366,14 @@ static void BuildLayout(HWND dlg)
     }
     EndCard();
 
+    // Cheats.
+    g_cy = top;
+    BeginCard(PG_CHEAT, L"CHEATS  \x00B7  APPLIED TO THE RUNNING GAME WHEN SAVED");
+    RowToggle(dlg, dc, IDC_CH_HEALTH);
+    RowToggle(dlg, dc, IDC_CH_FUEL);
+    RowToggle(dlg, dc, IDC_CH_ITEMS);
+    EndCard();
+
     // Launcher.
     g_cy = top;
     BeginCard(PG_LAUNCH, L"STARTUP");
@@ -424,6 +435,12 @@ static void DrawNavIcon(Graphics& g, int idx, REAL x, REAL y, REAL s, COLORREF c
         g.DrawEllipse(&p, x + 6.8f * u, y + 8.3f * u, 6.4f * u, 6.4f * u);
         PointF b[4] = { PointF(x + 6 * u, y + 6 * u), PointF(x + 7.8f * u, y + 3.4f * u), PointF(x + 12.2f * u, y + 3.4f * u), PointF(x + 14 * u, y + 6 * u) };
         g.DrawLines(&p, b, 4);
+        break;
+    }
+    case PG_CHEAT: {   // lightning bolt
+        PointF b[6] = { PointF(x + 11.5f * u, y + 1.5f * u), PointF(x + 4 * u, y + 11 * u), PointF(x + 9.5f * u, y + 11 * u),
+                        PointF(x + 8 * u, y + 18.5f * u), PointF(x + 16 * u, y + 8.5f * u), PointF(x + 10.5f * u, y + 8.5f * u) };
+        g.DrawPolygon(&p, b, 6);
         break;
     }
     case PG_LAUNCH: {   // sliders
@@ -539,12 +556,17 @@ static void PaintSummary(HWND dlg, HDC dc, Graphics& g)
     }
     const bool weapon = GetToggle(dlg, IDC_WEAPONSW), photo = GetToggle(dlg, IDC_PHOTO);
     if (g_photoKey >= 0x70 && g_photoKey <= 0x87) swprintf_s(key, L"F%d", g_photoKey - 0x6F); else swprintf_s(key, L"Key 0x%02X", g_photoKey);
-    const wchar_t* caps[4] = { L"GAMEPLAY FPS", L"RENDER SIZE", L"QUICK WEAPON SWITCH", L"PHOTO MODE KEY" };
-    const wchar_t* vals[4] = { fps, size, weapon ? L"On" : L"Off", photo ? key : L"Off" };
-    const COLORREF cols[4] = { kText, kText, weapon ? kText : kMuted, photo ? kText : kMuted };
-    const int tw = (r.right - r.left - S(40)) / 4;
-    for (int i = 0; i < 4; ++i) {
-        const int x = r.left + S(20) + i * tw;
+    const bool cheats = GetToggle(dlg, IDC_CH_HEALTH) || GetToggle(dlg, IDC_CH_FUEL) || GetToggle(dlg, IDC_CH_ITEMS);
+    const wchar_t* caps[5] = { L"GAMEPLAY FPS", L"RENDER SIZE", L"WEAPON SWITCH", L"PHOTO MODE KEY", L"CHEATS" };
+    const wchar_t* vals[5] = { fps, size, weapon ? L"On" : L"Off", photo ? key : L"Off", cheats ? L"On" : L"Off" };
+    const COLORREF cols[5] = { kText, kText, weapon ? kText : kMuted, photo ? kText : kMuted, cheats ? kWarn : kMuted };
+    // Column widths by content: the render size ("2880 x 1800 SS") needs the most room.
+    static const int weight[5] = { 17, 30, 18, 18, 17 };
+    const int total = r.right - r.left - S(40);
+    int x = r.left + S(20);
+    for (int i = 0; i < 5; ++i) {
+        const int tw = total * weight[i] / 100;
+        if (i) x += total * weight[i - 1] / 100;
         if (i) {
             Pen sep(C(kBorder), 1.0f);
             g.DrawLine(&sep, x - S(10), r.top + S(42), x - S(10), r.bottom - S(16));
@@ -942,7 +964,7 @@ static void ApplyWindowTheme(HWND dlg)
     DwmSetWindowAttribute(dlg, 34 /* DWMWA_BORDER_COLOR */, &border, sizeof border);
 }
 
-static bool IsToggle(int id) { return id == IDC_HFR || id == IDC_QTE || id == IDC_BLADE || id == IDC_VERTPLUS || id == IDC_SUPERSAMPLE || id == IDC_PHOTO || id == IDC_WEAPONSW || id == IDC_SOUND; }
+static bool IsToggle(int id) { return id == IDC_HFR || id == IDC_QTE || id == IDC_BLADE || id == IDC_VERTPLUS || id == IDC_SUPERSAMPLE || id == IDC_CH_HEALTH || id == IDC_CH_FUEL || id == IDC_CH_ITEMS || id == IDC_PHOTO || id == IDC_WEAPONSW || id == IDC_SOUND; }
 static bool IsCombo(int id) { return id == IDC_FPS || id == IDC_MENUFPS || id == IDC_KEEPCUTS || id == IDC_KEEPBODIES || id == IDC_INTRO || id == IDC_RES || id == IDC_SSFACTOR; }
 static void SetToggle(HWND dlg, int id, bool on)
 {
@@ -1511,6 +1533,9 @@ static void Load(HWND dlg)
     }
     SetToggle(dlg, IDC_VERTPLUS, ReadInt(L"Display", L"VertPlusFov", cfg::kVertPlusFov) != 0);
     SetToggle(dlg, IDC_SUPERSAMPLE, g_ssOn);
+    SetToggle(dlg, IDC_CH_HEALTH, ReadInt(L"Cheats", L"InfiniteHealth", 0) != 0);
+    SetToggle(dlg, IDC_CH_FUEL, ReadInt(L"Cheats", L"InfiniteFuelCells", 0) != 0);
+    SetToggle(dlg, IDC_CH_ITEMS, ReadInt(L"Cheats", L"InfiniteRepairItems", 0) != 0);
     {
         HWND f = GetDlgItem(dlg, IDC_SSFACTOR);
         AddItem(f, L"2.25x  (cleanest)", 225);
@@ -1559,6 +1584,9 @@ static void Save(HWND dlg)
     WriteInt(L"Debris", L"KeepLastCuts", SelectedValue(GetDlgItem(dlg, IDC_KEEPCUTS)));
     WriteInt(L"Debris", L"KeepCorpses", SelectedValue(GetDlgItem(dlg, IDC_KEEPBODIES)));
     WriteInt(L"Launcher", L"Intro", SelectedValue(GetDlgItem(dlg, IDC_INTRO)));
+    WriteInt(L"Cheats", L"InfiniteHealth", GetToggle(dlg, IDC_CH_HEALTH));
+    WriteInt(L"Cheats", L"InfiniteFuelCells", GetToggle(dlg, IDC_CH_FUEL));
+    WriteInt(L"Cheats", L"InfiniteRepairItems", GetToggle(dlg, IDC_CH_ITEMS));
 }
 
 static bool Launch(HWND dlg)
@@ -1783,7 +1811,7 @@ static INT_PTR CALLBACK DlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         g_valueFont = MakeFont(18, FW_SEMIBOLD, L"Segoe UI");
         g_playFont = MakeFont(14, FW_BOLD, L"Segoe UI");
         g_monoFont = MakeFont(9, FW_NORMAL, L"Consolas");
-        const int owner[] = { IDC_HFR, IDC_QTE, IDC_BLADE, IDC_VERTPLUS, IDC_SUPERSAMPLE, IDC_PLAY, IDC_PLAYBIG, IDC_SAVE, IDC_XMIN, IDC_XCLOSE, IDC_PREVIEW, IDC_MUTE,
+        const int owner[] = { IDC_HFR, IDC_QTE, IDC_BLADE, IDC_VERTPLUS, IDC_SUPERSAMPLE, IDC_CH_HEALTH, IDC_CH_FUEL, IDC_CH_ITEMS, IDC_PLAY, IDC_PLAYBIG, IDC_SAVE, IDC_XMIN, IDC_XCLOSE, IDC_PREVIEW, IDC_MUTE,
                               IDC_PHOTO, IDC_WEAPONSW, IDC_SOUND, IDC_LOGREFRESH, IDC_LOGFOLDER };
         for (int id : owner) SetWindowSubclass(GetDlgItem(dlg, id), HoverProc, 1, 0);
         for (int i = 0; i < PG_COUNT; ++i) SetWindowSubclass(GetDlgItem(dlg, IDC_NAV0 + i), HoverProc, 1, 0);

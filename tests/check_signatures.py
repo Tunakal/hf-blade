@@ -65,6 +65,8 @@ SITES = {"Limiter": (0xF98070, bytes.fromhex("558BEC83E4F8")),
          "Vanish0030": (0xB67710, bytes.fromhex("D9EE5683EC08")),
          "RepeatPad": (0xDDAE35, bytes.fromhex("FF412C8B412C")),
          "RepeatKb": (0xDDA23F, bytes.fromhex("FF402C8B482C")),
+         "ChMaxHp": (0xB7C980, bytes.fromhex("56578BF1")),
+         "ChConsume": (0x94D8D0, bytes.fromhex("FF49548B4154")),
          "SndPost": (0xE5E050, bytes.fromhex("83EC0C8B4424108B4C2414")),
          "SndPostBgm": (0xE5E1B0, bytes.fromhex("8B442404566A0050E8"))}
 RATE_CALLS = (0x5CC9B8, 0x5CD009, 0x5CD063, 0x5CD1DE, 0x5CD35E, 0x5CD4DF, 0x5CD64E, 0x5CD7CE, 0x5CDDE8,

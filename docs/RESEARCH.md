@@ -721,6 +721,28 @@ Reported 2026-11-12: the right-stick camera turned faster the higher the frame r
 - **Unverified:** whether mouse look also goes through the stick path. If it does not, mouse speed is
   unaffected.
 
+## 22. Cheats (static, 2026-11-13)
+
+- **Health.** The player's HP is the int `[pl+0x870]` (`pl = [0x01dc14c8]`). The Repair Unit heals
+  through `0x00b94770` → `0x00b877b0`, which adds to `+0x870` and clamps to `0x00b7c980(0)` (thiscall with one unused int argument, `RET 4`; calling it without the argument corrupts the stack:
+  `[pl+0x874]`, plus an upgrade term `vfunc[0x98]() × [pl+0x1e40]` outside the single-bar mode).
+  `[pl+0x4E4]` is the dead flag.
+- **Fuel cells.** `0x00be8310` → `0x00bda060` refills the cells: 24-byte entries at `[pl+0x3820]`, count
+  `[pl+0x3828]`, value `+4`, max `+0xC`, `+0x14 != 0` = unusable. With bit 31 of `0x01bea090` (single-bar
+  mode) it is one bar, `[pl+0x3830]` with max `[pl+0x3834]`.
+- **Items.** `0x0094db50` / `0x0094dcb0` use an item from the item menu: id at `+0x10`
+  (`0x23a6f56d` Repair Unit, `0x0d92bb0f` Electrolyte pack), count at `+0x54`; sounds
+  `core_se_sys_item_repair` / `_electro_repair`. They then call `vfunc[0x24]` = `0x0094d8d0`
+  (`DEC [ECX+0x54]`, and at 0 it marks the item empty).
+- **Patch** (`src/cheats.inl`, `[Cheats]`):
+  - `InfiniteHealth` / `InfiniteFuelCells`: once per frame on the main thread, HP and every usable
+    cell are set to their maximum (not while `+0x4E4` is set). A hit that takes all HP in one frame,
+    or a scripted death, still kills.
+  - `InfiniteRepairItems`: an entry detour at `0x0094d8d0` (`FF 49 54 8B 41 54`) returns without the
+    `DEC` for those two item ids.
+  - The flags are re-read when `hfblade.ini` changes (checked once a second), so the launcher can
+    switch cheats on and off while the game runs; switched off, nothing is written any more.
+
 ## Goals (player list, 2026-11-12/13)
 
 Done or mostly done: resolution and wide screen, quick boss-weapon switch, up to 360 Hz, photo mode.
