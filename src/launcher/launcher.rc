@@ -59,6 +59,9 @@ BEGIN
     LTEXT           "Render size", IDC_L_RES, 0, 0, 10, 10, LBL
     COMBOBOX        IDC_RES, 0, 0, 10, 10, CB_STYLE
     CONTROL         "Aspect-correct field of view", IDC_VERTPLUS, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Supersampling  (NVIDIA / AMD GPU, may lower fps)", IDC_SUPERSAMPLE, "Button", BTN, 0, 0, 10, 10
+    LTEXT           "Supersampling factor", IDC_L_SSFACTOR, 0, 0, 10, 10, LBL
+    COMBOBOX        IDC_SSFACTOR, 0, 0, 10, 10, CB_STYLE
     LTEXT           "", IDC_RESINFO, 0, 0, 10, 10, SS_CENTERIMAGE
     LTEXT           "The mod replaces the game's 1920x1080 option. In the game's graphics settings, pick 1920x1080 and fullscreen; it is then rendered at the size chosen here, with no black bars.", IDC_RESNOTE, 0, 0, 10, 10
 

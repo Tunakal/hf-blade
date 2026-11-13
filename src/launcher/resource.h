@@ -35,6 +35,9 @@
 #define IDC_PHOTOPAD2  1047
 #define IDC_PHOTOKB2   1048
 #define IDC_WEAPONSW   1049
+#define IDC_SUPERSAMPLE 1050
+#define IDC_L_SSFACTOR 1051
+#define IDC_SSFACTOR   1052
 #define IDC_NAV0       1060   // sidebar rows: IDC_NAV0 .. IDC_NAV0 + 5 (Play, Gameplay, Display, Photo Mode, Launcher, Log)
 #define IDC_PLAYBIG    1070
 #define IDC_SOUND      1071

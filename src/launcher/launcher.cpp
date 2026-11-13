@@ -49,6 +49,7 @@ static const COLORREF kAccentDn = RGB(0x12, 0x6E, 0xB0);   // pressed
 static const COLORREF kDanger  = RGB(0xC4, 0x2B, 0x1C);   // close-button hover
 static const COLORREF kWarn    = RGB(0xF0, 0xB4, 0x29);
 static const COLORREF kOff     = RGB(0x3A, 0x3D, 0x45);
+static const COLORREF kDisabled = RGB(0x4C, 0x50, 0x59);   // text of a locked row
 
 static Color C(COLORREF c, BYTE a = 255) { return Color(a, GetRValue(c), GetGValue(c), GetBValue(c)); }
 
@@ -84,6 +85,9 @@ static HFONT  g_titleFont, g_bigTitleFont, g_tagFont, g_subFont, g_sectionFont, 
 static HWND   g_hot;          // owner-drawn control under the mouse
 static Bitmap* g_art;         // optional key art
 static Bitmap* g_bannerBmp;   // banner (art cropped to fill + shading), rendered once per size
+static bool    g_ssOn = false;    // [Display] Supersample
+static int     g_ssFactor = 225;  // [Display] SupersampleFactor: 225 or 178
+static void EffectiveRes(HWND dlg, int& w, int& h);
 static bool    g_soundOn = true; // cut sound effects ([Launcher] Sound)
 
 static void AddRoundRect(GraphicsPath& p, REAL x, REAL y, REAL w, REAL h, REAL r)
@@ -182,6 +186,8 @@ static const Tip kTips[] = {
     { IDC_MUTE, 0, L"Turn the launcher's sound effects on or off." },
     { IDC_SOUND, 0, L"Play the cut sound effects when the launcher opens and in the preview. The speaker button in the top bar does the same." },
     { IDC_RES, IDC_L_RES, L"The size the game renders at when '1920x1080' is selected in its own options. Pick your screen's resolution for a sharp, full-screen picture." },
+    { IDC_SUPERSAMPLE, 0, L"Renders the game larger than the render size and lets the graphics driver shrink it to your screen: a cleaner, less jagged image. It can lower fps a lot (in one test, 2.25x took a laptop RTX 5070 Ti from about 200 to 110 fps). Needs an NVIDIA or AMD graphics card: turn on NVIDIA DLDSR or AMD VSR in the driver first." },
+    { IDC_SSFACTOR, IDC_L_SSFACTOR, L"How much larger the game renders. These are the NVIDIA DLDSR factors: 2.25x gives the cleanest image, 1.78x costs less frame rate." },
     { IDC_VERTPLUS, 0, L"Keeps the picture from looking zoomed in on screens that are not 16:9: taller screens get more view above and below, wider screens more at the sides. Also keeps the 3D HUD layer at the right size." },
     { IDC_PHOTO, 0, L"In game, F10 freezes everything, hides the HUD and lets you fly the camera to take screenshots (PrtSc with ReShade, F12 with Steam). F10 again resumes the game where it stopped." },
     { IDC_SAVE, 0, L"Save the settings to hfblade.ini." },
@@ -327,6 +333,8 @@ static void BuildLayout(HWND dlg)
     BeginCard(PG_DISP, L"RESOLUTION");
     RowCombo(dlg, dc, IDC_L_RES, IDC_RES, S(300), 0);
     RowToggle(dlg, dc, IDC_VERTPLUS);
+    RowToggle(dlg, dc, IDC_SUPERSAMPLE);
+    RowCombo(dlg, dc, IDC_L_SSFACTOR, IDC_SSFACTOR, S(220), 0);
     RowStart();
     PlaceCtl(dlg, PG_DISP, IDC_RESINFO, IX(), g_cy, IW(), S(20));
     g_cy += S(24);
@@ -524,7 +532,11 @@ static void PaintSummary(HWND dlg, HDC dc, Graphics& g)
 
     wchar_t fps[64], size[64], key[32];
     ComboText(dlg, IDC_FPS, fps, 64);
-    if (g_resH) swprintf_s(size, L"%d x %d", g_resW, g_resH); else wcscpy_s(size, L"Game default");
+    {
+        int ew, eh;
+        EffectiveRes(dlg, ew, eh);
+        if (eh) swprintf_s(size, GetToggle(dlg, IDC_SUPERSAMPLE) ? L"%d x %d SS" : L"%d x %d", ew, eh); else wcscpy_s(size, L"Game default");
+    }
     const bool weapon = GetToggle(dlg, IDC_WEAPONSW), photo = GetToggle(dlg, IDC_PHOTO);
     if (g_photoKey >= 0x70 && g_photoKey <= 0x87) swprintf_s(key, L"F%d", g_photoKey - 0x6F); else swprintf_s(key, L"Key 0x%02X", g_photoKey);
     const wchar_t* caps[4] = { L"GAMEPLAY FPS", L"RENDER SIZE", L"QUICK WEAPON SWITCH", L"PHOTO MODE KEY" };
@@ -623,7 +635,10 @@ static void PaintBackground(HWND dlg, HDC dc)
         if (l.page == g_page) g.DrawLine(&line, l.r.left, l.r.top, l.r.right, l.r.top);
     g.Flush(FlushIntentionSync);
     for (const PText& d : g_descs)
-        if (d.page == g_page) DrawTextIn(dc, d.text, d.r, g_descFont, kDim, DT_LEFT | DT_WORDBREAK);
+        if (d.page == g_page) {
+            const bool locked = d.text == DescFor(IDC_SSFACTOR) && !GetToggle(dlg, IDC_SUPERSAMPLE);
+            DrawTextIn(dc, d.text, d.r, g_descFont, locked ? kOff : kDim, DT_LEFT | DT_WORDBREAK);
+        }
 
     if (g_page == PG_PLAY) {
         PaintBanner(dc, g);
@@ -784,18 +799,19 @@ static void PaintCombo(HWND h, HDC dc)
     RECT rc;
     GetClientRect(h, &rc);
     FillRect(dc, &rc, g_cardBrush);
-    const bool hot = h == g_hot, open = SendMessageW(h, CB_GETDROPPEDSTATE, 0, 0) != 0, focus = GetFocus() == h;
+    const bool locked = !IsWindowEnabled(h);
+    const bool hot = !locked && h == g_hot, open = SendMessageW(h, CB_GETDROPPEDSTATE, 0, 0) != 0, focus = !locked && GetFocus() == h;
     {   // GDI+ first, GDI text after (see DrawToggle)
         Graphics g(dc);
         g.SetSmoothingMode(SmoothingModeAntiAlias);
         GraphicsPath p;
         AddRoundRect(p, REAL(rc.left) + 0.5f, REAL(rc.top) + 0.5f, REAL(rc.right - rc.left - 1), REAL(rc.bottom - rc.top - 1), 5.0f);
-        SolidBrush fill(C(hot || open ? kFieldHi : kField));
+        SolidBrush fill(C(locked ? kCard : hot || open ? kFieldHi : kField));
         g.FillPath(&fill, &p);
         Pen border(C(open || focus ? kAccent : hot ? RGB(0x4A, 0x4E, 0x57) : kBorder), 1.0f);
         g.DrawPath(&border, &p);
         const REAL cx = REAL(rc.right) - S(14), cy = REAL(rc.bottom) / 2, s = REAL(S(4));
-        Pen chev(C(open ? kAccentHi : kMuted), 1.6f);
+        Pen chev(C(locked ? kOff : open ? kAccentHi : kMuted), 1.6f);
         chev.SetStartCap(LineCapRound); chev.SetEndCap(LineCapRound);
         const REAL dir = open ? -1.0f : 1.0f;
         g.DrawLine(&chev, cx - s, cy - s * 0.5f * dir, cx, cy + s * 0.5f * dir);
@@ -809,7 +825,7 @@ static void PaintCombo(HWND h, HDC dc)
         RECT t = rc;
         t.left += S(12);
         t.right -= S(28);
-        DrawTextIn(dc, text, t, g_uiFont, kText, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+        DrawTextIn(dc, text, t, g_uiFont, locked ? kDisabled : kText, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
     }
 }
 
@@ -907,7 +923,7 @@ static void ApplyWindowTheme(HWND dlg)
     auto setMode = ux ? reinterpret_cast<SetPreferredAppModeFn>(GetProcAddress(ux, MAKEINTRESOURCEA(135))) : nullptr;
     auto allow = ux ? reinterpret_cast<AllowDarkFn>(GetProcAddress(ux, MAKEINTRESOURCEA(133))) : nullptr;
     if (setMode) setMode(2);   // ForceDark (undocumented, used widely for dark scrollbars)
-    const int combos[] = { IDC_FPS, IDC_MENUFPS, IDC_KEEPCUTS, IDC_KEEPBODIES, IDC_INTRO, IDC_RES };
+    const int combos[] = { IDC_FPS, IDC_MENUFPS, IDC_KEEPCUTS, IDC_KEEPBODIES, IDC_INTRO, IDC_RES, IDC_SSFACTOR };
     for (int id : combos) {
         HWND c = GetDlgItem(dlg, id);
         SetWindowSubclass(c, ComboProc, 1, 0);
@@ -926,8 +942,8 @@ static void ApplyWindowTheme(HWND dlg)
     DwmSetWindowAttribute(dlg, 34 /* DWMWA_BORDER_COLOR */, &border, sizeof border);
 }
 
-static bool IsToggle(int id) { return id == IDC_HFR || id == IDC_QTE || id == IDC_BLADE || id == IDC_VERTPLUS || id == IDC_PHOTO || id == IDC_WEAPONSW || id == IDC_SOUND; }
-static bool IsCombo(int id) { return id == IDC_FPS || id == IDC_MENUFPS || id == IDC_KEEPCUTS || id == IDC_KEEPBODIES || id == IDC_INTRO || id == IDC_RES; }
+static bool IsToggle(int id) { return id == IDC_HFR || id == IDC_QTE || id == IDC_BLADE || id == IDC_VERTPLUS || id == IDC_SUPERSAMPLE || id == IDC_PHOTO || id == IDC_WEAPONSW || id == IDC_SOUND; }
+static bool IsCombo(int id) { return id == IDC_FPS || id == IDC_MENUFPS || id == IDC_KEEPCUTS || id == IDC_KEEPBODIES || id == IDC_INTRO || id == IDC_RES || id == IDC_SSFACTOR; }
 static void SetToggle(HWND dlg, int id, bool on)
 {
     HWND h = GetDlgItem(dlg, id);
@@ -1452,6 +1468,20 @@ static void Load(HWND dlg)
         const int legacyH = ReadInt(L"Display", L"Height1920", cfg::kHeight);
         g_resH = ReadInt(L"Display", L"Height", legacyH);
         g_resW = ReadInt(L"Display", L"Width", cfg::kWidth);
+        // Supersampling stores the enlarged size in Width/Height; the list shows the base size.
+        g_ssOn = ReadInt(L"Display", L"Supersample", 0) != 0;
+        g_ssFactor = ReadInt(L"Display", L"SupersampleFactor", 225) == 178 ? 178 : 225;
+        if (ReadInt(L"Display", L"Supersample", -1) < 0) {   // older settings: a DLDSR size picked as render size
+            const int sw0 = GetSystemMetrics(SM_CXSCREEN), sh0 = GetSystemMetrics(SM_CYSCREEN);
+            if (g_resW == sw0 * 3 / 2 && g_resH == sh0 * 3 / 2) { g_ssOn = true; g_ssFactor = 225; }
+            else if (g_resW == (sw0 * 4 / 3 + 4) / 8 * 8 && g_resH == (sh0 * 4 / 3 + 4) / 8 * 8) { g_ssOn = true; g_ssFactor = 178; }
+        }
+        if (g_ssOn && g_resH) {
+            const int num = g_ssFactor == 178 ? 3 : 2, den = g_ssFactor == 178 ? 4 : 3;   // inverse of 4/3, 3/2
+            g_resW = (g_resW * num + den / 2) / den;
+            g_resH = (g_resH * num + den / 2) / den;
+            if (g_resW == 1920 && g_resH == 1080) g_resH = 0;   // supersampled game default
+        }
         HWND res = GetDlgItem(dlg, IDC_RES);
         const int sw = GetSystemMetrics(SM_CXSCREEN), sh = GetSystemMetrics(SM_CYSCREEN);
         struct { int w, h; const wchar_t* tag; } presets[] = {
@@ -1480,6 +1510,13 @@ static void Load(HWND dlg)
         SendMessageW(res, CB_SETCURSEL, found, 0);
     }
     SetToggle(dlg, IDC_VERTPLUS, ReadInt(L"Display", L"VertPlusFov", cfg::kVertPlusFov) != 0);
+    SetToggle(dlg, IDC_SUPERSAMPLE, g_ssOn);
+    {
+        HWND f = GetDlgItem(dlg, IDC_SSFACTOR);
+        AddItem(f, L"2.25x  (cleanest)", 225);
+        AddItem(f, L"1.78x  (lighter)", 178);
+        SelectValue(f, g_ssFactor);
+    }
     SetToggle(dlg, IDC_PHOTO, ReadInt(L"PhotoMode", L"Enabled", cfg::kPhotoMode) != 0);
     g_photoKey = ReadInt(L"PhotoMode", L"Key", cfg::kPhotoKey);
 
@@ -1509,11 +1546,14 @@ static void Save(HWND dlg)
     WriteInt(L"Fixes", L"BladeModeFix", GetToggle(dlg, IDC_BLADE));
     WriteInt(L"WeaponSwitch", L"Enabled", GetToggle(dlg, IDC_WEAPONSW));
     WriteInt(L"Fixes", L"QteEase", (int)SendDlgItemMessageW(dlg, IDC_EASE, TBM_GETPOS, 0, 0));
-    const int res = SelectedValue(GetDlgItem(dlg, IDC_RES));
-    WriteInt(L"Display", L"Width", res ? (res >> 16) & 0xFFFF : 1920);
-    WriteInt(L"Display", L"Height", res & 0xFFFF);
+    int outW, outH;
+    EffectiveRes(dlg, outW, outH);
+    WriteInt(L"Display", L"Width", outH ? outW : 1920);
+    WriteInt(L"Display", L"Height", outH);
     // Older mod builds only read Height1920 (width fixed at 1920); keep it in step.
-    WriteInt(L"Display", L"Height1920", res && ((res >> 16) & 0xFFFF) == 1920 ? (res & 0xFFFF) : 0);
+    WriteInt(L"Display", L"Height1920", outH && outW == 1920 ? outH : 0);
+    WriteInt(L"Display", L"Supersample", GetToggle(dlg, IDC_SUPERSAMPLE));
+    WriteInt(L"Display", L"SupersampleFactor", SelectedValue(GetDlgItem(dlg, IDC_SSFACTOR)));
     WriteInt(L"Display", L"VertPlusFov", GetToggle(dlg, IDC_VERTPLUS));
     WriteInt(L"PhotoMode", L"Enabled", GetToggle(dlg, IDC_PHOTO));
     WriteInt(L"Debris", L"KeepLastCuts", SelectedValue(GetDlgItem(dlg, IDC_KEEPCUTS)));
@@ -1609,6 +1649,19 @@ static void ShowPage(HWND dlg, int page)
     RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
 
+// The size the game renders at: the chosen render size, enlarged when supersampling is on
+// (DLDSR factors: 1.78x pixels = 4/3 per side, 2.25x = 3/2). Height 0 = game default, untouched.
+static void EffectiveRes(HWND dlg, int& w, int& h)
+{
+    const int res = SelectedValue(GetDlgItem(dlg, IDC_RES));
+    w = res ? (res >> 16) & 0xFFFF : 1920;
+    h = res & 0xFFFF;
+    if (!GetToggle(dlg, IDC_SUPERSAMPLE)) return;
+    if (!h) h = 1080;
+    if (SelectedValue(GetDlgItem(dlg, IDC_SSFACTOR)) == 178) { w = (w * 4 / 3 + 4) / 8 * 8; h = (h * 4 / 3 + 4) / 8 * 8; }
+    else { w = w * 3 / 2; h = h * 3 / 2; }
+}
+
 // Short description of the chosen shape under the render-size combo.
 static void UpdateResInfo(HWND dlg)
 {
@@ -1616,8 +1669,11 @@ static void UpdateResInfo(HWND dlg)
     g_resW = res ? (res >> 16) & 0xFFFF : 1920;
     g_resH = res & 0xFFFF;
     wchar_t buf[256];
+    const int sw = GetSystemMetrics(SM_CXSCREEN), sh = GetSystemMetrics(SM_CYSCREEN);
     if (!g_resH) {
         wcscpy_s(buf, L"The game's own 1920x1080 (16:9). Nothing is changed.");
+    } else if (g_resW > sw && g_resH > sh) {
+        wcscpy_s(buf, L"Larger than your screen: needs NVIDIA DLDSR or AMD VSR, and it can lower fps a lot.");
     } else {
         const float a = float(g_resW) / float(g_resH), base = 16.0f / 9.0f;
         wchar_t shape[16];
@@ -1630,7 +1686,16 @@ static void UpdateResInfo(HWND dlg)
         else if (a < base) swprintf_s(buf, L"%s, taller than 16:9: more picture above and below (Vert+).", shape);
         else swprintf_s(buf, L"%s, wider than 16:9: more picture at the sides (Hor+). The HUD is stretched for now.", shape);
     }
+    if (GetToggle(dlg, IDC_SUPERSAMPLE)) {
+        int ew, eh;
+        EffectiveRes(dlg, ew, eh);
+        swprintf_s(buf, L"Supersampling on: the game renders at %d x %d. Sharper, but it can lower fps a lot.", ew, eh);
+    }
     SetDlgItemTextW(dlg, IDC_RESINFO, buf);
+    EnableWindow(GetDlgItem(dlg, IDC_SSFACTOR), GetToggle(dlg, IDC_SUPERSAMPLE));
+    InvalidateRect(GetDlgItem(dlg, IDC_SSFACTOR), nullptr, FALSE);
+    InvalidateRect(GetDlgItem(dlg, IDC_L_SSFACTOR), nullptr, TRUE);
+    InvalidateRect(dlg, nullptr, FALSE);   // the factor's description
     if (g_page == PG_DISP) InvalidateRect(dlg, &g_shapeBox, FALSE), InvalidateRect(dlg, &g_shapeCap, FALSE);
 }
 
@@ -1718,16 +1783,16 @@ static INT_PTR CALLBACK DlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         g_valueFont = MakeFont(18, FW_SEMIBOLD, L"Segoe UI");
         g_playFont = MakeFont(14, FW_BOLD, L"Segoe UI");
         g_monoFont = MakeFont(9, FW_NORMAL, L"Consolas");
-        const int owner[] = { IDC_HFR, IDC_QTE, IDC_BLADE, IDC_VERTPLUS, IDC_PLAY, IDC_PLAYBIG, IDC_SAVE, IDC_XMIN, IDC_XCLOSE, IDC_PREVIEW, IDC_MUTE,
+        const int owner[] = { IDC_HFR, IDC_QTE, IDC_BLADE, IDC_VERTPLUS, IDC_SUPERSAMPLE, IDC_PLAY, IDC_PLAYBIG, IDC_SAVE, IDC_XMIN, IDC_XCLOSE, IDC_PREVIEW, IDC_MUTE,
                               IDC_PHOTO, IDC_WEAPONSW, IDC_SOUND, IDC_LOGREFRESH, IDC_LOGFOLDER };
         for (int id : owner) SetWindowSubclass(GetDlgItem(dlg, id), HoverProc, 1, 0);
         for (int i = 0; i < PG_COUNT; ++i) SetWindowSubclass(GetDlgItem(dlg, IDC_NAV0 + i), HoverProc, 1, 0);
-        const int statics[] = { IDC_L_FPS, IDC_L_MENU, IDC_L_EASE, IDC_L_PIECES, IDC_L_BODIES, IDC_L_INTRO, IDC_L_RES, IDC_RESINFO, IDC_RESNOTE,
+        const int statics[] = { IDC_L_FPS, IDC_L_MENU, IDC_L_EASE, IDC_L_PIECES, IDC_L_BODIES, IDC_L_INTRO, IDC_L_RES, IDC_L_SSFACTOR, IDC_RESINFO, IDC_RESNOTE,
                                 IDC_PHOTOPAD, IDC_PHOTOPAD2, IDC_PHOTOKB, IDC_PHOTOKB2, IDC_HINT, IDC_WARN };
         for (int id : statics) SendDlgItemMessageW(dlg, id, WM_SETFONT, (WPARAM)g_uiFont, FALSE);
         SendDlgItemMessageW(dlg, IDC_EASEVAL, WM_SETFONT, (WPARAM)g_btnFont, FALSE);
         SendDlgItemMessageW(dlg, IDC_LOGVIEW, WM_SETFONT, (WPARAM)g_monoFont, FALSE);
-        const int combos[] = { IDC_FPS, IDC_MENUFPS, IDC_KEEPCUTS, IDC_KEEPBODIES, IDC_INTRO, IDC_RES };
+        const int combos[] = { IDC_FPS, IDC_MENUFPS, IDC_KEEPCUTS, IDC_KEEPBODIES, IDC_INTRO, IDC_RES, IDC_SSFACTOR };
         for (int id : combos) {
             SendDlgItemMessageW(dlg, id, WM_SETFONT, (WPARAM)g_uiFont, FALSE);
             SendDlgItemMessageW(dlg, id, CB_SETITEMHEIGHT, (WPARAM)-1, S(20));
@@ -1800,7 +1865,8 @@ static INT_PTR CALLBACK DlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         SetTextColor(dc, id == IDC_WARN ? kWarn
                          : id == IDC_HINT ? (g_dirty ? kWarn : kMuted)
                          : id == IDC_RESNOTE || id == IDC_PHOTOPAD2 || id == IDC_PHOTOKB2 ? kMuted
-                         : id == IDC_EASEVAL || id == IDC_RESINFO ? kAccentHi : kText);
+                         : id == IDC_EASEVAL || id == IDC_RESINFO ? kAccentHi
+                         : id == IDC_L_SSFACTOR && !GetToggle(dlg, IDC_SUPERSAMPLE) ? kDisabled : kText);
         SelectObject(dc, id == IDC_EASEVAL ? g_btnFont : g_uiFont);
         return (INT_PTR)(footer ? g_bgBrush : g_cardBrush);
     }
@@ -1843,12 +1909,12 @@ static INT_PTR CALLBACK DlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         const int id = LOWORD(wp), code = HIWORD(wp);
         if (IsToggle(id) && (code == BN_CLICKED || code == BN_DOUBLECLICKED)) {
             if (id == IDC_SOUND) ApplySound(dlg, !g_soundOn);
-            else { SetToggle(dlg, id, !GetToggle(dlg, id)); MarkDirty(dlg); }
+            else { SetToggle(dlg, id, !GetToggle(dlg, id)); if (id == IDC_SUPERSAMPLE) UpdateResInfo(dlg); MarkDirty(dlg); }
             return TRUE;
         }
         if (IsCombo(id) && (code == CBN_SELCHANGE || code == CBN_DROPDOWN || code == CBN_CLOSEUP)) {
             if (code == CBN_SELCHANGE) {
-                if (id == IDC_RES) UpdateResInfo(dlg);
+                if (id == IDC_RES || id == IDC_SSFACTOR) UpdateResInfo(dlg);
                 MarkDirty(dlg);
             }
             InvalidateRect((HWND)lp, nullptr, FALSE);

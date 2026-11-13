@@ -75,7 +75,10 @@ automatically on first start.
 - **Launcher.** `hfblade-launcher.exe` edits `hfblade.ini`. A sidebar switches between these pages:
   - **Play:** a summary and Save & Play;
   - **Gameplay:** FPS preset (60 to 360), menu FPS, the fixes, QTE ease, the weapon switch, debris and bodies;
-  - **Display:** render size and FOV.
+  - **Display:** render size, FOV and supersampling. Supersampling (on/off, factor 1.78x or 2.25x)
+    renders the game larger than the render size and lets NVIDIA DLDSR or AMD VSR shrink it to the
+    screen, for a cleaner image. The driver option must be on. It can lower fps a lot (in one test, 2.25x
+    on a laptop RTX 5070 Ti went from about 200 to 110 fps).
   - **Photo Mode:** the controls;
   - **Launcher:** opening animation and sound;
   - **Log:** the last lines of `hfblade.log`.
