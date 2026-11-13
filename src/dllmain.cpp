@@ -687,6 +687,76 @@ static void InstallTitleFps(const char* ini)
     Log("Title screen: runs at %d fps (TitleFPS).", g_titleFps);
 }
 
+// Menu auto-repeat: the input devices count frames while a button or stick direction is held
+// (pad 0xddaac0, keyboard 0xdda1xx), against a delay [0x1dd05bc] and an interval [0x1dd05b8]. Above
+// the original rate a short tap outlasts the delay and one press moves 2-3 steps. The counters now
+// advance only on the original-rate tick: 30 Hz in the 30 fps (menu) mode, else 60 Hz.
+static const uintptr_t VA_REPEAT_PAD     = 0x00DDAE35;   // INC [ECX+0x2C]; MOV EAX,[ECX+0x2C]
+static const uintptr_t VA_REPEAT_PAD_SKIP = 0x00DDAE5B;  // epilogue (repeat mask stays = trigger)
+static const uintptr_t VA_REPEAT_KB      = 0x00DDA23F;   // INC [EAX+0x2C]; MOV ECX,[EAX+0x2C]
+static const uintptr_t VA_REPEAT_KB_SKIP = 0x00DDA267;   // POP EDI; POP ESI; RET (EBX not pushed yet)
+static const uint8_t kRepeatPadOrig[] = { 0xFF, 0x41, 0x2C, 0x8B, 0x41, 0x2C };
+static const uint8_t kRepeatKbOrig[]  = { 0xFF, 0x40, 0x2C, 0x8B, 0x48, 0x2C };
+extern "C" {
+    volatile LONG g_repeatTick = 1;
+    uintptr_t g_repPadCont = 0, g_repPadSkip = 0, g_repKbCont = 0, g_repKbSkip = 0;
+}
+extern "C" __declspec(naked) void RepeatPadHook()
+{
+    __asm {
+        cmp   dword ptr [g_repeatTick], 0
+        je    skip
+        inc   dword ptr [ecx + 0x2C]
+        mov   eax, dword ptr [ecx + 0x2C]
+        jmp   dword ptr [g_repPadCont]
+    skip:
+        jmp   dword ptr [g_repPadSkip]
+    }
+}
+extern "C" __declspec(naked) void RepeatKbHook()
+{
+    __asm {
+        cmp   dword ptr [g_repeatTick], 0
+        je    skip
+        inc   dword ptr [eax + 0x2C]
+        mov   ecx, dword ptr [eax + 0x2C]
+        jmp   dword ptr [g_repKbCont]
+    skip:
+        jmp   dword ptr [g_repKbSkip]
+    }
+}
+static void UpdateRepeatTick(bool mode30)
+{
+    static int64_t last = 0;
+    static double acc = 0;
+    const int64_t now = Now();
+    const double dt = last ? double(now - last) / double(g_freq.QuadPart) : 0.0;
+    last = now;
+    if (!g_hfrOn) { g_repeatTick = 1; acc = 0; return; }
+    const double period = mode30 ? 1.0 / 30.0 : 1.0 / 60.0;
+    acc += dt;
+    if (acc >= period) {
+        g_repeatTick = 1;
+        acc -= period;
+        if (acc > period) acc = period;   // below the original rate: one tick per frame, as in vanilla
+    } else g_repeatTick = 0;
+}
+static void InstallInputRepeat()
+{
+    if (!Matches("RepeatPad", VA_REPEAT_PAD, kRepeatPadOrig, sizeof kRepeatPadOrig) ||
+        !Matches("RepeatKb", VA_REPEAT_KB, kRepeatKbOrig, sizeof kRepeatKbOrig)) {
+        Log("Input repeat: signatures do not match. Not applied.");
+        return;
+    }
+    g_repPadCont = VA_REPEAT_PAD + g_delta + sizeof kRepeatPadOrig;
+    g_repPadSkip = VA_REPEAT_PAD_SKIP + g_delta;
+    g_repKbCont  = VA_REPEAT_KB + g_delta + sizeof kRepeatKbOrig;
+    g_repKbSkip  = VA_REPEAT_KB_SKIP + g_delta;
+    WriteJmp(VA_REPEAT_PAD, &RepeatPadHook, sizeof kRepeatPadOrig);
+    WriteJmp(VA_REPEAT_KB, &RepeatKbHook, sizeof kRepeatKbOrig);
+    Log("Input repeat: menu auto-repeat runs at the original rate.");
+}
+
 extern "C" void __cdecl LimiterHook()
 {
     ++g_frameNo;
@@ -705,6 +775,7 @@ extern "C" void __cdecl LimiterHook()
     TraceInput();
     UpdateFrameScalars();
     const bool mode30 = *At<int>(VA_RATE_MODE) == 1;
+    UpdateRepeatTick(mode30);
     int fps = g_hfrOn ? (mode30 ? g_menuFps : g_targetFps) : (mode30 ? 30 : 60);
     {   // title screen at TitleFPS; the fixed (30 fps) path is rescaled to match while it is up
         static bool wasTitle = false;
@@ -1655,6 +1726,7 @@ static void Install()
     InstallDebris(ini);
     InstallCorpses(ini);
     InstallGekko(ini);
+    InstallInputRepeat();
     InstallPhotoMode(ini);
     InstallWeaponSwitch(ini);
 

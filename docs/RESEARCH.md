@@ -671,6 +671,18 @@ to 300.
 
 **Settings:** `[WeaponSwitch]` `Enabled`, `PadButton` (XInput mask, default 2 = D-pad down), `Key`., `QuietMs`.
 
+## 19b. Menu auto-repeat (static, 2026-11-13)
+
+Player report: at 360 fps one tap in the chapter menu moved 2-3 steps; at 120 fps it was fine.
+- The pad device update `0x00ddaac0` and a second device (`0x00dda1xx`, repeat block at `0x00dda23f`)
+  count frames in `+0x2C` while the held mask is unchanged. The repeat bit fires when the count equals
+  the delay `[0x01dd05bc]`, then every interval `[0x01dd05b8]` (set by `0x00dd9a70`).
+- Counted in frames, the delay shrinks with the frame rate, so a tap outlasts it at 360 fps.
+- **Patch:** `0x00ddae35` (`FF 41 2C 8B 41 2C`) and `0x00dda23f` (`FF 40 2C 8B 48 2C`). The counter
+  advances only on an original-rate tick (30 Hz in the 30 fps menu mode, else 60 Hz, computed once per
+  frame after Present). Without a tick the repeat test is skipped, so the repeat mask stays equal to the
+  trigger mask.
+
 ## 20. 240–360 fps
 
 - **Range and presets.** `kMaxFps` is now 360. The presets are 60, 90, 120, 144, 165, 240 and 360.
