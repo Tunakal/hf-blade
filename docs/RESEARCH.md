@@ -665,6 +665,10 @@ switch now waits until `0x11A4 == 0` and `0x2658 != 0` have both held for `Settl
     it, so the game still treated the old weapon as equipped and drove its motions with the new
     weapon's data.
 - **Fix:** write `[0x01b7588c] = kind` with the request. `SettleMs` is back to 750.
+- **Still crashes (2026-11-13, in game):** with L'Étranger, a switch requested right after a Y attack
+  (2 → 4) crashed about 1 s later at the same `0x00e23924` (call chain through `0x00e22e61`,
+  `0x00e3e683`, `0x00e3d10d`). The persistent-record fix did not cover this case. For the first release
+  the switch is off by default (`Enabled=0`) and marked experimental in the launcher.
 - The real fix is to check that the player's current motion is not from the weapon's set. That needs
   the crash's call stack (Frida exception handler). `QuietMs` default lowered
 to 300.

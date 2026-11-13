@@ -176,7 +176,7 @@ static const Tip kTips[] = {
     { IDC_MENUFPS, IDC_L_MENU, L"Frame rate for menus and the scenes the game runs in its 30 fps mode." },
     { IDC_HFR, 0, L"Turns all frame-rate patches on or off. In game, F9 switches between the mod and the original 60 fps." },
     { IDC_QTE, 0, L"At high frame rates button-mash QTEs (e.g. Sundowner's shield) would need twice the presses. This keeps them at real-time speed." },
-    { IDC_WEAPONSW, 0, L"In game, D-pad down switches the unique (heavy attack) weapon to the next one you own, without opening the weapon menu." },
+    { IDC_WEAPONSW, 0, L"In game, D-pad down switches the unique (heavy attack) weapon to the next one you own, without opening the weapon menu. Experimental: switching right after a boss-weapon attack (for example with L'Etranger) can crash the game." },
     { IDC_BLADE, 0, L"Keeps Blade Mode slow motion and its synced animations at real-time speed at high frame rates." },
     { IDC_EASE, IDC_L_EASE, L"How fast a mash gauge drains at high fps, compared with the original. 100% = the same as 60 fps, lower = easier." },
     { IDC_KEEPCUTS, IDC_L_PIECES, L"Pieces from your last cuts stay on the ground instead of exploding and vanishing. Older ones are cleaned up as usual." },

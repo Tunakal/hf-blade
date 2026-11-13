@@ -68,7 +68,7 @@ BEGIN
 
     // Controller
     CONTROL         "PlayStation button icons", IDC_PSICONS, "Button", BTN, 0, 0, 10, 10
-    CONTROL         "Quick weapon switch  (D-pad down)", IDC_WEAPONSW, "Button", BTN, 0, 0, 10, 10
+    CONTROL         "Quick weapon switch  (D-pad down, experimental)", IDC_WEAPONSW, "Button", BTN, 0, 0, 10, 10
 
     // Photo Mode
     CONTROL         "Enable photo mode  (F10 in game)", IDC_PHOTO, "Button", BTN, 0, 0, 10, 10

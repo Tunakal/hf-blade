@@ -6,7 +6,7 @@ remaster-like experience:
 - 16:10, wide and ultrawide with an aspect-correct FOV, and optional supersampling;
 - persistent cut debris and enemy bodies;
 - a photo mode (freeze, free camera, hidden HUD);
-- a quick boss-weapon switch on the D-pad;
+- an experimental quick boss-weapon switch on the D-pad (off by default);
 - optional PlayStation button icons for DualSense and DualShock players;
 - optional cheats (infinite health, fuel cells and repair items), switchable while you play;
 - a settings launcher.
@@ -46,9 +46,9 @@ The mod is a `dinput8.dll` proxy. It loads alongside dgVoodoo and ReShade withou
    original game, because their many large pieces cost frame rate and block the way (`KeepGekko`).
 5. **Photo mode (F10).** Freezes the game, hides the HUD and gives you a free camera. See
    [Photo mode](#photo-mode) below.
-6. **Quick weapon switch (D-pad down).** Switches the unique (heavy attack) weapon to the next one you
-   own, without opening the weapon menu (`[WeaponSwitch]`; the button and an optional keyboard key are
-   configurable).
+6. **Quick weapon switch (D-pad down, experimental, off by default).** Switches the unique (heavy
+   attack) weapon to the next one you own, without opening the weapon menu (`[WeaponSwitch]`; the
+   button and an optional keyboard key are configurable). It can crash the game, see Known issues.
 7. **PlayStation button icons (off by default).** The game only has Xbox button icons on PC. With
    `[Display] ButtonIcons=1` (launcher page "Controller") the prompts and menus show PlayStation
    buttons instead: cross, circle, square, triangle, L1/R1/L2/R2, L3/R3, OPTIONS and CREATE. The icons
@@ -183,8 +183,8 @@ Only tested with Raiden in the main story; the DLC characters are untested.
 - If a QTE still fails at a high frame rate, press **F9** to switch to the original 60 fps, then press
   F9 again to switch back.
 - Timed hit-stop and short slow-motion effects still last half as long at 120 fps.
-- Quick weapon switch: switching while L'Étranger (polearm) is still in Raiden's hand after a Y attack
-  crashes the game. Switch to the sword (X) first. Other boss weapons are fine.
+- Quick weapon switch (off by default): switching shortly after a boss-weapon attack, for example
+  with L'Étranger (polearm), can crash the game. Switch while idle, or use the weapon menu.
 - Controller rumble is shorter, because its timer counts frames.
 - Other game systems that ignore the frame multiplier may also run at the wrong speed. See the
   checklist in [docs/RESEARCH.md](docs/RESEARCH.md).
