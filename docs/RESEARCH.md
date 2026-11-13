@@ -780,6 +780,28 @@ Reported 2026-11-12: the right-stick camera turned faster the higher the frame r
   DualSense alone and Steam Input not enabled for the game, no slot is connected and Steam's
   `config/virtualgamepadinfo.txt` stays empty.
 
+## 24. Grab-escape (stick shake) QTEs (static + Frida, 2026-11-13)
+
+Reported in the 120 fps playthrough: shaking the left stick to escape GEKKO's wire (and similar grabs)
+felt harder than at 60 fps.
+- **Code.** Every grab escape uses `0x00b7a7c0` (20 callers, e.g. GEKKO `0x00b6e640`, another enemy
+  `0x0046ed30`). It returns, for this frame, `([pl+0xcfc] != 0) + ([pl+0x2600] != 0)`: `pl+0xcf8` is
+  the player's pad copy (+0 hold, +4 trigger = rising edge), and `+0x2600` is set on the frame the left
+  stick first goes past |stick|^2 > 640000 (`0x00b84e50`). The owner does `SUB [owner+0x940], EAX`
+  and escapes when it is below 0 before the grab motion ends (GEKKO: motion end; `0x46ed30`: motion
+  frame 35..45). The start value comes from the enemy's parameter table (`0x00ac8660(0, 0x1e)`).
+- **QTE prompt API** (found on the way): `0x00cbc8f0(kind, 1)` shows the prompt (`[0x01dc1274]=1`,
+  kind in `[0x01dc1280]`; `0x4000` = stick shake), `0x00cbc9c0` hides it, `[0x018b56b4]=1` = done.
+  The manager update is `0x00d3e080`, called once from `0x0098774a`.
+- **Measured with Frida** (probe on `0x00b7a7c0`, same enemy, 121 vs 61 fps): the window lasted the
+  same real time (1158/1157 ms at 121 fps, 1150 ms at 61 fps; the other phase 1566 vs 1567 ms), and
+  shakes counted at the same rate (about 15 per second, one stick edge plus one trigger bit per push).
+  The required count doubled with each grab of the encounter (10, 20, 40) regardless of the frame
+  rate, and the 61 fps attempt failed as well.
+- **Conclusion:** no frame-rate dependence found in this QTE; no patch. A "QTEs at 60 fps" switch
+  (drop to the original timing while a prompt is shown) was tried and rejected (crash during the test,
+  which the dump put in XAudio2, and the player did not want fps drops). Kept in `git stash`.
+
 ## Goals (player list, 2026-11-12/13)
 
 Done or mostly done: resolution and wide screen, quick boss-weapon switch, up to 360 Hz, photo mode.
