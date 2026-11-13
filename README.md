@@ -190,6 +190,10 @@ Only tested with Raiden in the main story; the DLC characters are untested.
   checklist in [docs/RESEARCH.md](docs/RESEARCH.md).
 - Photo mode: mouse look does not work yet; use the arrow keys or the right stick.
 - PlayStation button icons: the controls screen still shows the Xbox controller drawing.
+- DualSense / DualShock: the game reads controllers only through XInput, so a PlayStation controller
+  works only through Steam Input. If the game does not react to it, enable Steam Input for this game in
+  Steam (right-click the game > Properties > Controller > "Enable Steam Input"). `hfblade.log` shows
+  `Controllers: XInput slots 0 connected.` when the controller reaches the game.
 
 ## Legal
 
