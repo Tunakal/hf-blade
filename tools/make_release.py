@@ -1,7 +1,7 @@
 """Builds the release zip from build/ (run build.bat first): dist/HF-Blade-<version>.zip.
 
 The zip holds the files that go next to METAL GEAR RISING REVENGEANCE.exe, plus the README and the
-license. The version is read from src/config.h (cfg::kVersion).
+license. The version is read from src/version.h.
 
 Usage: py -3 tools/make_release.py
 """
@@ -14,8 +14,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def main():
-    cfg = open(os.path.join(ROOT, 'src', 'config.h'), encoding='utf-8').read()
-    version = re.search(r'kVersion\[\]\s*=\s*"([^"]+)"', cfg).group(1)
+    vh = open(os.path.join(ROOT, 'src', 'version.h'), encoding='utf-8').read()
+    version = '.'.join(re.search(r'HFB_VERSION_%s\s+(\d+)' % k, vh).group(1) for k in ('MAJOR', 'MINOR', 'PATCH'))
     files = [
         ('build/dinput8.dll', 'dinput8.dll'),
         ('build/hfblade-launcher.exe', 'hfblade-launcher.exe'),

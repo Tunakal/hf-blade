@@ -1,6 +1,37 @@
 #include <windows.h>
 #include <commctrl.h>
 #include "resource.h"
+#include "../version.h"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION     HFB_VERSION_NUM
+ PRODUCTVERSION  HFB_VERSION_NUM
+ FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+ FILEFLAGS       0x0L
+ FILEOS          VOS_NT_WINDOWS32
+ FILETYPE        VFT_APP
+ FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "HF Blade (open source, " HFB_HOMEPAGE ")"
+            VALUE "FileDescription",  "HF Blade settings launcher"
+            VALUE "FileVersion",      HFB_VERSION_STR
+            VALUE "InternalName",     "hfblade-launcher"
+            VALUE "LegalCopyright",   HFB_COPYRIGHT
+            VALUE "OriginalFilename", "hfblade-launcher.exe"
+            VALUE "ProductName",      "HF Blade"
+            VALUE "ProductVersion",   HFB_VERSION_STR
+            VALUE "Comments",         "Edits hfblade.ini next to the game. Source: " HFB_HOMEPAGE
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
 
 1 24 "launcher.manifest"
 

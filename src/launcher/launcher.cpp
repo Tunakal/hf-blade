@@ -29,7 +29,9 @@ static wchar_t g_dir[MAX_PATH];   // folder of this exe, with trailing backslash
 static wchar_t g_ini[MAX_PATH];
 static const wchar_t kGameExe[] = L"METAL GEAR RISING REVENGEANCE.exe";
 static const wchar_t kSteamUrl[] = L"steam://rungameid/235460";
-static const wchar_t kVersion[] = L"Settings launcher  \x00B7  v0.1.0";
+#define HFB_WIDEN2(x) L##x
+#define HFB_WIDEN(x) HFB_WIDEN2(x)
+static const wchar_t kVersion[] = L"Settings launcher  \x00B7  v" HFB_WIDEN(HFB_VERSION_STR);
 
 // ---------------------------------------------------------------------------
 // Theme

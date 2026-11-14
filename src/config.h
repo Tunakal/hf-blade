@@ -1,5 +1,6 @@
 // HF Blade: settings shared by the mod DLL and the launcher (hfblade.ini). Keep both in sync through here.
 #pragma once
+#include "version.h"
 
 namespace cfg {
 
@@ -8,7 +9,7 @@ static const char kLegacyIniName[] = "mgr-hfr.ini";   // pre-rename name, migrat
 static const char kLogName[] = "hfblade.log";
 static const char kOldLogName[] = "hfblade.old.log";   // the previous log once it passes kLogMaxBytes
 static const long kLogMaxBytes = 1024 * 1024;
-static const char kVersion[] = "0.1.0";
+static const char kVersion[] = HFB_VERSION_STR;   // version.h
 
 // Frame-rate presets offered by the launcher and cycled in game with PresetKey.
 static const int kPresets[] = { 60, 90, 120, 144, 165, 240, 360 };

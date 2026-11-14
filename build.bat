@@ -11,7 +11,8 @@ if not defined VS (echo Visual Studio C++ tools not found & exit /b 1)
 call "%VS%\VC\Auxiliary\Build\vcvars32.bat" >nul || exit /b 1
 cd /d "%~dp0"
 if not exist build mkdir build
-cl /nologo /O2 /MT /EHsc /W4 /Fobuild\ src\dllmain.cpp ^
+rc /nologo /fo build\dinput8.res src\dinput8.rc || exit /b 1
+cl /nologo /O2 /MT /EHsc /W4 /Fobuild\ src\dllmain.cpp build\dinput8.res ^
    /LD /Febuild\dinput8.dll ^
    /link /DEF:src\dinput8.def kernel32.lib user32.lib || exit /b 1
 set "RCDEF="
