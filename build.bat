@@ -19,5 +19,5 @@ if exist src\launcher\launcher.ico set "RCDEF=/dHAVE_ICON"
 rc /nologo %RCDEF% /fo build\launcher.res src\launcher\launcher.rc || exit /b 1
 cl /nologo /O2 /MT /EHsc /W4 /DUNICODE /D_UNICODE /Fobuild\ src\launcher\launcher.cpp src\launcher\audio.cpp build\launcher.res ^
    /Febuild\hfblade-launcher.exe ^
-   /link /SUBSYSTEM:WINDOWS user32.lib gdi32.lib comctl32.lib shell32.lib gdiplus.lib uxtheme.lib dwmapi.lib ole32.lib xaudio2.lib mfplat.lib mfreadwrite.lib mfuuid.lib
+   /link /SUBSYSTEM:WINDOWS user32.lib gdi32.lib comctl32.lib shell32.lib gdiplus.lib uxtheme.lib dwmapi.lib ole32.lib xaudio2.lib mfplat.lib mfreadwrite.lib mfuuid.lib delayimp.lib /DELAYLOAD:mfplat.dll /DELAYLOAD:mfreadwrite.dll
 exit /b %ERRORLEVEL%

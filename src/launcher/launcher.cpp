@@ -29,7 +29,7 @@ static wchar_t g_dir[MAX_PATH];   // folder of this exe, with trailing backslash
 static wchar_t g_ini[MAX_PATH];
 static const wchar_t kGameExe[] = L"METAL GEAR RISING REVENGEANCE.exe";
 static const wchar_t kSteamUrl[] = L"steam://rungameid/235460";
-static const wchar_t kVersion[] = L"Settings launcher";
+static const wchar_t kVersion[] = L"Settings launcher  \x00B7  v0.1.0";
 
 // ---------------------------------------------------------------------------
 // Theme
@@ -1505,6 +1505,12 @@ static void Load(HWND dlg)
         const int legacyH = ReadInt(L"Display", L"Height1920", cfg::kHeight);
         g_resH = ReadInt(L"Display", L"Height", legacyH);
         g_resW = ReadInt(L"Display", L"Width", cfg::kWidth);
+        if (g_resH < 0) {   // auto (first run): show the user's screen; Save writes it explicitly
+            const int aw = GetSystemMetrics(SM_CXSCREEN), ah = GetSystemMetrics(SM_CYSCREEN);
+            const bool usable = aw >= 1280 && ah >= 720 && !(aw == 1920 && ah == 1080);
+            g_resW = usable ? aw : 1920;
+            g_resH = usable ? ah : 0;
+        }
         // Supersampling stores the enlarged size in Width/Height; the list shows the base size.
         g_ssOn = ReadInt(L"Display", L"Supersample", 0) != 0;
         g_ssFactor = ReadInt(L"Display", L"SupersampleFactor", 225) == 178 ? 178 : 225;

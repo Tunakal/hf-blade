@@ -456,8 +456,17 @@ static void InstallDisplay(const char* ini)
 {
     // [Display] Width/Height; older configs only have Height1920 (width 1920).
     const int legacyH = GetPrivateProfileIntA("Display", "Height1920", 0, ini);
-    const int height = GetPrivateProfileIntA("Display", "Height", legacyH, ini);
-    const int width = GetPrivateProfileIntA("Display", "Width", 1920, ini);
+    int height = GetPrivateProfileIntA("Display", "Height", legacyH, ini);
+    int width = GetPrivateProfileIntA("Display", "Width", 1920, ini);
+    if (height < 0) {   // auto: render the "1920x1080" option at the primary screen's resolution
+        DEVMODEA dm = {};
+        dm.dmSize = sizeof dm;
+        if (!EnumDisplaySettingsA(nullptr, ENUM_CURRENT_SETTINGS, &dm)) { Log("Display: auto, screen size unknown; unchanged."); return; }
+        width = int(dm.dmPelsWidth);
+        height = int(dm.dmPelsHeight);
+        if (width == 1920 && height == 1080) { Log("Display: auto, the screen is 1920x1080; unchanged."); return; }
+        Log("Display: auto, using the screen's %dx%d.", width, height);
+    }
     if (height == 0) { Log("Display: unchanged (Height=0)."); return; }
     if (height < 720 || height > 4320 || width < 1280 || width > 7680) {
         Log("Display: %dx%d out of range, ignored.", width, height);
@@ -2023,6 +2032,16 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID)
         DWORD n = GetModuleFileNameA(nullptr, g_dir, MAX_PATH);
         while (n > 0 && g_dir[n - 1] != '\\') --n;
         g_dir[n] = '\0';
+        {   // keep the log small: past 1 MB the old one is kept as hfblade.old.log
+            char path[MAX_PATH], old[MAX_PATH];
+            _snprintf_s(path, _TRUNCATE, "%s%s", g_dir, cfg::kLogName);
+            _snprintf_s(old, _TRUNCATE, "%s%s", g_dir, cfg::kOldLogName);
+            WIN32_FILE_ATTRIBUTE_DATA fa;
+            if (GetFileAttributesExA(path, GetFileExInfoStandard, &fa) && (fa.nFileSizeHigh || fa.nFileSizeLow > (DWORD)cfg::kLogMaxBytes))
+                MoveFileExA(path, old, MOVEFILE_REPLACE_EXISTING);
+            SYSTEMTIME t; GetLocalTime(&t);
+            Log("---- HF Blade %s, %04d-%02d-%02d ----", cfg::kVersion, t.wYear, t.wMonth, t.wDay);
+        }
         Install();
     }
     return TRUE;

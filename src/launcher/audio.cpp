@@ -178,11 +178,15 @@ bool Audio_Init(const wchar_t* exeDir)
 {
     if (g_xa) return true;
     g_comInit = SUCCEEDED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED));
-    if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return false;
-    g_mfInit = true;
+    // Media Foundation is delay-loaded: Windows N/KN editions lack it unless the Media Feature Pack is
+    // installed. Without it the launcher still runs and plays its synthesized sounds.
+    g_mfInit = LoadLibraryExW(L"mfplat.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32) &&
+               LoadLibraryExW(L"mfreadwrite.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32) &&
+               SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE));
 
     const wchar_t* patterns[] = { L"*.mp3", L"*.wav" };
     for (const wchar_t* pat : patterns) {
+        if (!g_mfInit) break;
         wchar_t glob[MAX_PATH];
         swprintf_s(glob, L"%shfblade-sounds\\%s", exeDir, pat);
         WIN32_FIND_DATAW fd;

@@ -34,7 +34,7 @@ The mod is a `dinput8.dll` proxy. It loads alongside dgVoodoo and ReShade withou
    spins for the last ~1.5 ms. Scenes the game runs at 30 fps stay at 30 fps.
 
 3. **16:10, wide and ultrawide (`[Display] Width`/`Height`).** The in-game "1920x1080" option is
-   rendered at the size you choose, with no black bars. Examples: 1920×1200, 2560×1080, 3440×1440,
+   rendered at your screen's resolution by default, or at a size you choose, with no black bars. Examples: 1920×1200, 2560×1080, 3440×1440,
    5120×1440. The camera aspect follows the chosen size. With `VertPlusFov`, screens taller than
    16:9 get more view above and below (Vert+), wider screens keep the game's Hor+, and the 3D HUD
    layer is sized for the real height. Use fullscreen.
@@ -83,8 +83,20 @@ You need Visual Studio 2022 with the C++ x86 tools. Run `build.bat`. The outputs
 
 ## Install / uninstall
 
-Copy `build\dinput8.dll`, `hfblade.ini` and, if you want it, `build\hfblade-launcher.exe` next to
-`METAL GEAR RISING REVENGEANCE.exe`. To uninstall, delete those files.
+1. Download `HF-Blade-<version>.zip` from the [Releases](https://github.com/Tunakal/hf-blade/releases)
+   page.
+2. In Steam, right-click the game > Manage > Browse local files. Unzip `dinput8.dll`, `hfblade.ini`
+   and `hfblade-launcher.exe` into that folder, next to `METAL GEAR RISING REVENGEANCE.exe`.
+3. Run `hfblade-launcher.exe` to change settings, then **Save & Play**. Starting the game from Steam
+   also works.
+4. In the game's graphics settings pick **1920x1080** and fullscreen. The mod renders it at your
+   screen's resolution (`[Display] Height=-1`, the default), so 16:10 and ultrawide screens get a full
+   picture with no black bars. On a 1920x1080 screen nothing changes.
+
+To uninstall, delete those three files (and `hfblade.log` if it is there).
+
+To build it yourself, run `build.bat` (Visual Studio 2022 C++ tools), then `py -3 tools/make_release.py`
+for the zip.
 
 ## Settings
 

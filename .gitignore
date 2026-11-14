@@ -25,3 +25,4 @@ intro_*.png
 
 # Launcher sound effects are user-supplied (third-party files; check their license before committing)
 hfblade-sounds/
+dist/

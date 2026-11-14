@@ -6,6 +6,9 @@ namespace cfg {
 static const char kIniName[] = "hfblade.ini";
 static const char kLegacyIniName[] = "mgr-hfr.ini";   // pre-rename name, migrated on first run
 static const char kLogName[] = "hfblade.log";
+static const char kOldLogName[] = "hfblade.old.log";   // the previous log once it passes kLogMaxBytes
+static const long kLogMaxBytes = 1024 * 1024;
+static const char kVersion[] = "0.1.0";
 
 // Frame-rate presets offered by the launcher and cycled in game with PresetKey.
 static const int kPresets[] = { 60, 90, 120, 144, 165, 240, 360 };
@@ -26,8 +29,8 @@ static const int kQteFix       = 1;     // [Fixes] QteFix
 static const int kQteEase      = 60;    // [Fixes] QteEase, percent 10..100
 static const int kSlowMoFix    = 1;     // [Fixes] SlowMoFix: timed slow-downs and hit-stop in real time
 static const int kBladeModeFix = 1;     // [Fixes] BladeModeFix
-static const int kWidth        = 1920;  // [Display] Width  (render size for the game's "1920x1080" option)
-static const int kHeight       = 1200;  // [Display] Height (0 = off; older configs: Height1920)
+static const int kWidth        = 0;     // [Display] Width  (render size for the game's "1920x1080" option)
+static const int kHeight       = -1;    // [Display] Height: -1 = the primary screen's resolution, 0 = off (older configs: Height1920)
 static const int kVertPlusFov  = 1;     // [Display] VertPlusFov
 static const int kButtonIcons  = 0;     // [Display] ButtonIcons: 0 = Xbox (game), 1 = PlayStation
 static const int kKeepLastCuts = 2;     // [Debris] KeepLastCuts, 0 = off, max 8
