@@ -68,7 +68,9 @@ SITES = {"Limiter": (0xF98070, bytes.fromhex("558BEC83E4F8")),
          "ChMaxHp": (0xB7C980, bytes.fromhex("56578BF1")),
          "ChConsume": (0x94D8D0, bytes.fromhex("FF49548B4154")),
          "SndPost": (0xE5E050, bytes.fromhex("83EC0C8B4424108B4C2414")),
-         "SndPostBgm": (0xE5E1B0, bytes.fromhex("8B442404566A0050E8"))}
+         "SndPostBgm": (0xE5E1B0, bytes.fromhex("8B442404566A0050E8")),
+         "CombatSet": (0xC4D1A0, bytes.fromhex("837C2404005 68BF1".replace(" ",""))),
+         "DropTarget": (0xB2E550, bytes.fromhex("56578BF98D8F94100000"))}
 RATE_CALLS = (0x5CC9B8, 0x5CD009, 0x5CD063, 0x5CD1DE, 0x5CD35E, 0x5CD4DF, 0x5CD64E, 0x5CD7CE, 0x5CDDE8,
               0x5CDF77, 0x5CE193, 0x5CE67E, 0x5CE7FE, 0x5CE97D, 0x5CEBFD, 0x8CE295, 0xAE44C7)
 CORPSE_CALLS = {0xB3F668: 0xB346D0, 0xB3F8C7: 0xB346D0, 0xB3F9B8: 0xB346D0, 0xB35ABA: 0xB346D0,
@@ -150,6 +152,11 @@ try:
     want = (0x015FD378 + delta) & 0xFFFFFFFF
     good = p[:2] == bytes.fromhex("FF25") and operand == want
     print("TexThunk %s (expect FF25 %08X) %s" % (p.hex(" "), want, "OK" if good else "MISMATCH"))
+    ok &= good
+    p = read(pi.hProcess, 0xAAC310 + delta, 6)   # Em0600 (EXCELSUS) ctor: MOV [ESI], vtable
+    want = (0x0167793C + delta) & 0xFFFFFFFF
+    good = p[:2] == bytes.fromhex("C706") and struct.unpack("<I", p[2:])[0] == want
+    print("Em0600Ctor %s (expect C706 %08X) %s" % (p.hex(" "), want, "OK" if good else "MISMATCH"))
     ok &= good
     print("RESULT:", "PASS" if ok else "FAIL")
 finally:

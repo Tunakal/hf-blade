@@ -422,6 +422,14 @@ Fuller notes are in `evidence/corpse_notes-2026-11-06.md`.
 - Skipped bodies: special deaths (`Em0010 +0xDD4 & 0x100`) and instant vanishes (`Em0030 +0xA50 == 0`).
 - The ring is locked, and pointers are only compared.
 
+**Alerts and scripted waves (2026-11-14, playthrough).** With 8 kept bodies the rising platform
+section never brought its enemies and the alert stayed at 99.99. Em0010's vanish `0x00b346d0` ends
+with combat bookkeeping that the skipped call also skipped: `0x00c4d1a0` (ECX = `0x01beb908`, args
+`[+0x4F0]` handle, 0) sets the enemy's entry `+0x34` to 0 in the combat manager's list, and `0x00b2e550`
+(ECX = enemy) makes the player drop it as a target (`vfunc 0x25c(-1,0,0)`). CorpseKeep now does both
+once when a body starts being kept. The flags vanish also sets (`+0x4E4`, `+0x168C`) are left alone,
+because the death states may read them.
+
 **Not covered yet:**
 - other enemy types (Em0060/0070/0080/0100/0120/0190/0221, the DLC clones), which have their own
   vanish functions;
@@ -454,6 +462,13 @@ zandatsu the grabbed enemy's pieces hung in the air.
 - In vanilla, the pieces are deleted when the grab ends: the enemy's vanish calls `0x00940450`.
 - **Patch:** an entry detour at `0x00941450` (`51 53 55 56 57 8D 69 50`) records those group ids.
   Pieces and bodies of a recorded group are no longer kept, so they vanish as in vanilla.
+
+**EXCELSUS** (2026-11-14, player request)
+- Em0600 is Metal Gear EXCELSUS (vtable `0x0167793c`, written only by its constructor at `0x00aac310`,
+  `C7 06 <vtable>`). Its fight cuts very large pieces.
+- **Patch:** that instruction goes through a stub that records the object. While the object still
+  has the Em0600 vtable (guarded read; base destructors overwrite it), `DebrisOnPiece` does not take
+  new pieces, so they explode and vanish as in vanilla. Bodies are unaffected.
 
 **GEKKO** (2026-11-13, player request)
 - Em0030 is the GEKKO (the exe has the string `em0030_gekko`). It is large: cut, it breaks into many

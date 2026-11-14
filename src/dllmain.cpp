@@ -1203,6 +1203,36 @@ extern "C" __declspec(naked) void ZanRegisterHook()
     }
 }
 
+// EXCELSUS (Em0600): its fight cuts very large pieces, so new pieces are not kept while it exists
+// (they explode and vanish as in the original game). Its constructor at 0x00aac310 writes the vtable;
+// the stub records the object. While that object still has the Em0600 vtable it is alive (after
+// destruction the base destructors overwrite the vtable). The read is guarded.
+static const uintptr_t VA_EM0600_VTSET  = 0x00AAC310;   // C7 06 <Em0600 vtable>: MOV [ESI], vtable
+static const uintptr_t VA_EM0600_VTABLE = 0x0167793C;
+extern "C" {
+    uintptr_t g_em0600Vt = 0, g_em0600Cont = 0;
+    volatile uintptr_t g_em0600Obj = 0;
+}
+extern "C" __declspec(naked) void Em0600CtorHook()
+{
+    __asm {
+        push  eax
+        mov   eax, dword ptr [g_em0600Vt]
+        mov   dword ptr [esi], eax
+        mov   dword ptr [g_em0600Obj], esi
+        pop   eax
+        jmp   dword ptr [g_em0600Cont]
+    }
+}
+
+static bool ExcelsusActive()
+{
+    const uintptr_t obj = g_em0600Obj;
+    if (!obj) return false;
+    __try { return *reinterpret_cast<volatile uintptr_t*>(obj) == g_em0600Vt; }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+
 // Called for every live piece each frame. Returns 1 if the piece belongs to one of the last N cuts.
 extern "C" int __cdecl DebrisOnPiece(uint8_t* piece)
 {
@@ -1217,6 +1247,7 @@ extern "C" int __cdecl DebrisOnPiece(uint8_t* piece)
     // A new piece: age (seconds) just started and we have not released it before.
     if (*reinterpret_cast<float*>(piece + 0x884) >= 0.05f) return 0;
     if (Contains(g_released, _countof(g_released), piece)) return 0;
+    if (ExcelsusActive()) return 0;   // EXCELSUS fight: pieces vanish as in the original game
 
     const int64_t now = Now();
     if (!(g_evCount > 0 && now - g_lastNewPiece < g_freq.QuadPart * 3 / 10)) {
@@ -1416,6 +1447,15 @@ static void InstallDebris(const char* ini)
     g_debrisPreFn = VA_DEBRIS_PRE_FN + g_delta;
     for (uintptr_t va : VA_DEBRIS_ACTOR_CALLS) WriteCall(va, &DebrisActorHook, 5);
     Log("Debris: keeping the pieces of the last %d cut(s) (objects + 3 enemy-part types).", g_keepCuts);
+    const uint8_t* vs = At<uint8_t>(VA_EM0600_VTSET);
+    if (vs[0] == 0xC7 && vs[1] == 0x06 && *reinterpret_cast<const uint32_t*>(vs + 2) == VA_EM0600_VTABLE + g_delta) {
+        g_em0600Vt = VA_EM0600_VTABLE + g_delta;
+        g_em0600Cont = VA_EM0600_VTSET + g_delta + 6;
+        WriteJmp(VA_EM0600_VTSET, &Em0600CtorHook, 6);
+        Log("Debris: pieces are not kept during the EXCELSUS fight.");
+    } else {
+        Log("Signature mismatch at Em0600Ctor (0x%08X). Pieces are kept during the EXCELSUS fight too.", (unsigned)(VA_EM0600_VTSET + g_delta));
+    }
     UnblockDebrisObjectives();
 }
 
@@ -1455,6 +1495,29 @@ extern "C" {
 
 static int g_keepGekko = 0;   // [Debris] KeepGekko: 0 = GEKKOs (Em0030) explode and vanish as in vanilla
 
+// Em0010's vanish also takes the enemy out of the combat bookkeeping before deleting it:
+// 0x00c4d1a0 (ECX = 0x01beb908, handle [+0x4F0], 0) marks it inactive in the combat manager's list,
+// and 0x00b2e550 (ECX = enemy) makes the player drop it as a target. Skipping vanish skipped these, so
+// kept bodies still counted as fighting enemies: the alert never ended and scripted waves (the rising
+// platform in R-01) never came. They are done once when a body starts being kept.
+static const uintptr_t VA_COMBAT_MGR   = 0x01BEB908;
+static const uintptr_t VA_COMBAT_SET   = 0x00C4D1A0;   // thiscall(handle, value), RET 8
+static const uintptr_t VA_DROP_TARGET  = 0x00B2E550;   // thiscall(), RET
+static const uintptr_t VA_VANISH_REG   = 0x00B347C6;   // MOV ECX,[ESI+4F0]; PUSH 0; PUSH ECX; MOV ECX,mgr; CALL
+static const uint8_t   kCombatSetOrig[]  = { 0x83, 0x7C, 0x24, 0x04, 0x00, 0x56, 0x8B, 0xF1 };
+static const uint8_t   kDropTargetOrig[] = { 0x56, 0x57, 0x8B, 0xF9, 0x8D, 0x8F, 0x94, 0x10, 0x00, 0x00 };
+typedef void (__thiscall* CombatSetFn)(void*, uint32_t, int);
+typedef void (__thiscall* DropTargetFn)(void*);
+static CombatSetFn  g_combatSet = nullptr;
+static DropTargetFn g_dropTarget = nullptr;
+
+static void CorpseUnregister(uint8_t* obj)
+{
+    if (!g_combatSet || !g_dropTarget) return;
+    g_combatSet(At<void>(VA_COMBAT_MGR), *reinterpret_cast<uint32_t*>(obj + 0x4F0), 0);
+    g_dropTarget(obj);
+}
+
 // Returns 1 to skip the vanish call (body is kept), 0 to let it run.
 extern "C" int __cdecl CorpseKeep(uint8_t* obj, int site, int ebxValue)
 {
@@ -1487,6 +1550,7 @@ extern "C" int __cdecl CorpseKeep(uint8_t* obj, int site, int ebxValue)
         g_corpses[g_corpseNewest] = obj;
         ++g_corpseCount;
         if (g_logCorpses) Log("corpse: keep %p (%s, site %d)", obj, cs.kind == 0 ? "Em0010" : "Em0030", site);
+        if (cs.kind == 0) CorpseUnregister(obj);
     }
     int32_t& step = *reinterpret_cast<int32_t*>(obj + 0x61C);
     switch (cs.mode) {
@@ -1657,6 +1721,16 @@ static void InstallCorpses(const char* ini)
     }
     g_vanish0010 = VA_VANISH_0010 + g_delta;
     g_vanish0030 = VA_VANISH_0030 + g_delta;
+    const uint8_t* reg = At<uint8_t>(VA_VANISH_REG);
+    if (Matches("CombatSet", VA_COMBAT_SET, kCombatSetOrig, sizeof kCombatSetOrig) &&
+        Matches("DropTarget", VA_DROP_TARGET, kDropTargetOrig, sizeof kDropTargetOrig) &&
+        reg[9] == 0xB9 && *reinterpret_cast<const uint32_t*>(reg + 10) == VA_COMBAT_MGR + g_delta) {
+        g_combatSet = reinterpret_cast<CombatSetFn>(VA_COMBAT_SET + g_delta);
+        g_dropTarget = reinterpret_cast<DropTargetFn>(VA_DROP_TARGET + g_delta);
+    } else {
+        Log("Corpses: combat bookkeeping not matched. Bodies not kept (they would block alerts and waves).");
+        return;
+    }
     for (size_t i = 0; i < _countof(kCorpseSites); ++i) WriteCall(kCorpseSites[i].va, reinterpret_cast<const void*>(kCorpseStubs[i]), 5);
     Log("Corpses: keeping the last %d enemy bodies (Em0010, Em0030 GEKKO only with KeepGekko=1; %u vanish calls).", g_keepCorpses, (unsigned)_countof(kCorpseSites));
     UnblockDebrisObjectives();
