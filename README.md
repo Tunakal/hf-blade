@@ -208,6 +208,19 @@ Only tested with Raiden in the main story; the DLC characters are untested.
   Steam (right-click the game > Properties > Controller > "Enable Steam Input"). `hfblade.log` shows
   `Controllers: XInput slots 0 connected.` when the controller reaches the game.
 
+## Problems and feedback
+
+Open an [issue](https://github.com/Tunakal/hf-blade/issues/new/choose) and attach `hfblade.log` from
+the game folder, with your graphics card, screen resolution and what happened. Two quick checks help:
+
+- Press **F9** in game to switch to the original 60 fps. If the problem goes away, it is a frame-rate
+  issue; say so in the report.
+- If the game crashes, a dump in `%LOCALAPPDATA%\CrashDumps` (`METAL GEAR RISING REVENGEANCE.exe.*.dmp`)
+  shows where.
+
+Check [Known issues](#known-issues--open-questions) first. Ideas are welcome too (choose "Feature
+request").
+
 ## Legal
 
 This project contains no code or assets from the game. Addresses and behavioural descriptions are the

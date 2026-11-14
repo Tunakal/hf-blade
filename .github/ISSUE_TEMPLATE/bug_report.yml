@@ -1,0 +1,64 @@
+name: Bug report
+description: Something breaks, crashes or looks wrong with HF Blade installed.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please attach `hfblade.log` from the game folder (next to
+        `METAL GEAR RISING REVENGEANCE.exe`); it shows which patches were applied and what happened.
+        If the problem also happens at the original 60 fps (press F9 in game), please say so.
+  - type: input
+    id: version
+    attributes:
+      label: HF Blade version
+      description: Shown in the launcher's sidebar and on the first line of each session in hfblade.log.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead. Where in the game (chapter, boss, scene)?
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of problem
+      options:
+        - Crash
+        - QTE, Blade Mode or timing feels wrong at high fps
+        - Display (resolution, black bars, stretching, FOV)
+        - Game gets stuck (enemies do not come, objective does not finish)
+        - Photo mode
+        - Launcher
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: fps
+    attributes:
+      label: Frame rate setting
+      description: Gameplay FPS in the launcher, and whether it also happens after F9 (original 60 fps).
+      placeholder: "120, does not happen after F9"
+  - type: input
+    id: hardware
+    attributes:
+      label: Graphics card, screen resolution and Windows version
+      placeholder: "RTX 4070, 2560x1440, Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: hfblade.log
+      description: Drag the file here, or paste its last lines. A crash dump from %LOCALAPPDATA%\CrashDumps helps too.
+    validations:
+      required: true
+  - type: textarea
+    id: other
+    attributes:
+      label: Other mods or tools
+      description: ReShade, dgVoodoo, DXVK, other dinput8.dll / d3d9.dll mods, overlays.

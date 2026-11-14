@@ -1,0 +1,16 @@
+name: Feature request
+description: An idea for HF Blade.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: Describe the change and where in the game it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why?
+      description: What it would make better, or what bothers you now.
