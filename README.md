@@ -67,6 +67,8 @@ The mod is a `dinput8.dll` proxy. It loads alongside dgVoodoo and ReShade withou
    - particle effects such as blood on the floor update at 60 Hz with the right time step, so they last
      as long as in the original game (`EffectTimingFix`);
    - menu auto-repeat runs at the original rate, so one press moves one step;
+   - timed slow-downs and hit-stop last as long as at 60 fps, for example the moment to enter Blade
+     Mode when Armstrong throws debris (`SlowMoFix`);
    - frame time is measured with a double-precision timer, so long sessions do not jitter
      (`PreciseFrameTime`).
 
@@ -182,7 +184,6 @@ Only tested with Raiden in the main story; the DLC characters are untested.
   Build it from source if you prefer, and add an exclusion for the game folder.
 - If a QTE still fails at a high frame rate, press **F9** to switch to the original 60 fps, then press
   F9 again to switch back.
-- Timed hit-stop and short slow-motion effects still last half as long at 120 fps.
 - Quick weapon switch (off by default): switching shortly after a boss-weapon attack, for example
   with L'Étranger (polearm), can crash the game. Switch while idle, or use the weapon menu.
 - Controller rumble is shorter, because its timer counts frames.

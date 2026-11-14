@@ -24,6 +24,7 @@ static const int kLogInput     = 0;     // [General] LogInput
 static const int kHighFrameRate = 1;    // [General] HighFrameRate
 static const int kQteFix       = 1;     // [Fixes] QteFix
 static const int kQteEase      = 60;    // [Fixes] QteEase, percent 10..100
+static const int kSlowMoFix    = 1;     // [Fixes] SlowMoFix: timed slow-downs and hit-stop in real time
 static const int kBladeModeFix = 1;     // [Fixes] BladeModeFix
 static const int kWidth        = 1920;  // [Display] Width  (render size for the game's "1920x1080" option)
 static const int kHeight       = 1200;  // [Display] Height (0 = off; older configs: Height1920)

@@ -334,8 +334,17 @@ multiplier.
   - It eases the plane angle `[player+0x3F8]` toward the stick angle by k = (stick magnitude)² per
     frame (`0x00bb5fa0`).
   - At full tilt it snaps, so only partial tilts react faster at 120 fps.
-- **Not fixed:** timed per-unit slows and hit-stop count whole frames, so they last half as long at
-  120 fps. These are the counters at `0x00e0896c`, `0x00e061b1` and `0x00c238e0`.
+- **Cause 4** (reported 2026-11-14: in the Armstrong fight the slow-down when he throws debris ended
+  before Blade Mode could be entered): timed per-unit slows and hit-stop count whole frames, so they
+  lasted half as long at 120 fps.
+  - Slow-rate units, two copies of the same code (`0x00e0896c` in the cascade `0x00e087f0`, and
+    `0x00e061b6`): a hold counter `+0x24` (rate forced to 1.0 while it runs) and a duration `+0x20`
+    (rate `+0x14` until it reaches 0).
+  - The world slow / hit-stop timer `0x00c238e0`: a delay `+0xA0`, then the world rates
+    (`0x00e03a70`, groups 0..2) are set to `+0x98` for `+0x9C` frames.
+  - **Patch** (`[Fixes] SlowMoFix`, default 1): the six `DEC`s subtract `g_ticksSlow`, the whole
+    60 Hz ticks of this frame above 60 fps (0 or 1 at 120 fps), and 1 per frame otherwise, so the
+    30 fps mode is unchanged.
 
 ## 14. Persistent debris (static, partly delegated; hook bytes verified by me)
 

@@ -129,6 +129,7 @@ extern "C" {
     float     g_qteDecay = 0.01f;   // 0.01 per 60 fps frame, scaled by the frame multiplier (and ease)
     int32_t   g_ticks60 = 1;        // whole 60 Hz ticks elapsed this frame (0/1 at 120 fps)
     int32_t   g_ticksDecay = 1;     // same, scaled by g_qteEase (mash-gauge decrement)
+    int32_t   g_ticksSlow = 1;      // g_ticks60 above 60 fps, else 1 per frame as in vanilla (slow-mo counters)
     float     g_easeNow = 1.0f;     // g_qteEase while HFR is on, else 1
 }
 static float g_qteEase = 1.0f;      // [Fixes] QteEase / 100: fraction of the original gauge decay kept in HFR
@@ -215,6 +216,7 @@ static void UpdateFrameScalars()
     const int decayTicks = int(accDecay);
     accDecay -= decayTicks;
     g_ticksDecay = decayTicks;
+    g_ticksSlow = (g_hfrOn && mult > 0.0f && mult < 1.0f) ? ticks : 1;
 }
 
 extern "C" {
@@ -828,6 +830,109 @@ static void InstallVertPlus()
     for (uintptr_t va : VA_PROJ_CALLS) WriteCall(va, &FovStub, 5);
     Log("Aspect FOV applied: %u projection calls, world x%.3f, 3D UI x%.3f (tan).",
         (unsigned)_countof(VA_PROJ_CALLS), g_fovK, g_fovKUi);
+}
+
+// ---------------------------------------------------------------------------
+// Timed slow motion and hit-stop ([Fixes] SlowMoFix). See docs/RESEARCH.md section 13.
+// The slow-rate units (0x00e087f0 and a copy at 0x00e061b6) and the world slow/hit-stop timer
+// 0x00c238e0 count whole frames, so above 60 fps these slow-downs (e.g. when Armstrong throws debris
+// and Raiden has a moment to enter Blade Mode) ended twice as early. Each DEC now subtracts the whole
+// 60 Hz ticks of this frame (g_ticksSlow: 0 or 1 at 120 fps, 1 at 60 fps and in the 30 fps mode).
+// ---------------------------------------------------------------------------
+static const uintptr_t VA_SLOW_A = 0x00E0896C;   // unit EDX, counter EAX
+static const uintptr_t VA_SLOW_B = 0x00E061B6;   // unit EAX, counter ECX
+static const uintptr_t VA_HITSTOP_DELAY = 0x00C238ED;
+static const uintptr_t VA_HITSTOP_TIME  = 0x00C23957;
+static const uint8_t kSlowAOrig[] = { 0x8B, 0x42, 0x24, 0x3B, 0xC3, 0x7E, 0x09, 0x48, 0xD9, 0x52, 0x10, 0x89, 0x42, 0x24,
+                                      0xEB, 0x17, 0xFF, 0x4A, 0x20, 0x39, 0x5A, 0x20, 0x7F, 0x09 };
+static const uint8_t kSlowBOrig[] = { 0x8B, 0x48, 0x24, 0x3B, 0xCB, 0x7E, 0x09, 0x49, 0xD9, 0x50, 0x10, 0x89, 0x48, 0x24,
+                                      0xEB, 0x17, 0xFF, 0x48, 0x20, 0x39, 0x58, 0x20, 0x7F, 0x09 };
+static const uint8_t kHitDelayOrig[] = { 0x48, 0x89, 0x86, 0xA0, 0x00, 0x00, 0x00, 0x85, 0xC0 };
+static const uint8_t kHitTimeOrig[]  = { 0x48, 0x89, 0x86, 0x9C, 0x00, 0x00, 0x00, 0x85, 0xC0 };
+extern "C" {
+    uintptr_t g_slowAHoldRet = 0, g_slowATimeRet = 0, g_slowBHoldRet = 0, g_slowBTimeRet = 0;
+    uintptr_t g_hitDelayRet = 0, g_hitTimeRet = 0;
+}
+extern "C" __declspec(naked) void SlowAHold()   // was: DEC EAX; FST [EDX+10]; MOV [EDX+24],EAX
+{
+    __asm {
+        sub   eax, dword ptr [g_ticksSlow]
+        fst   dword ptr [edx + 0x10]
+        mov   dword ptr [edx + 0x24], eax
+        jmp   dword ptr [g_slowAHoldRet]
+    }
+}
+extern "C" __declspec(naked) void SlowATime()   // was: DEC [EDX+20]; CMP [EDX+20],EBX
+{
+    __asm {
+        push  eax
+        mov   eax, dword ptr [g_ticksSlow]
+        sub   dword ptr [edx + 0x20], eax
+        pop   eax
+        cmp   dword ptr [edx + 0x20], ebx
+        jmp   dword ptr [g_slowATimeRet]
+    }
+}
+extern "C" __declspec(naked) void SlowBHold()   // was: DEC ECX; FST [EAX+10]; MOV [EAX+24],ECX
+{
+    __asm {
+        sub   ecx, dword ptr [g_ticksSlow]
+        fst   dword ptr [eax + 0x10]
+        mov   dword ptr [eax + 0x24], ecx
+        jmp   dword ptr [g_slowBHoldRet]
+    }
+}
+extern "C" __declspec(naked) void SlowBTime()   // was: DEC [EAX+20]; CMP [EAX+20],EBX
+{
+    __asm {
+        push  ecx
+        mov   ecx, dword ptr [g_ticksSlow]
+        sub   dword ptr [eax + 0x20], ecx
+        pop   ecx
+        cmp   dword ptr [eax + 0x20], ebx
+        jmp   dword ptr [g_slowBTimeRet]
+    }
+}
+extern "C" __declspec(naked) void HitDelay()    // was: DEC EAX; MOV [ESI+A0],EAX
+{
+    __asm {
+        sub   eax, dword ptr [g_ticksSlow]
+        mov   dword ptr [esi + 0xA0], eax
+        jmp   dword ptr [g_hitDelayRet]
+    }
+}
+extern "C" __declspec(naked) void HitTime()     // was: DEC EAX; MOV [ESI+9C],EAX
+{
+    __asm {
+        sub   eax, dword ptr [g_ticksSlow]
+        mov   dword ptr [esi + 0x9C], eax
+        jmp   dword ptr [g_hitTimeRet]
+    }
+}
+
+// Depends on LimiterHook updating g_ticksSlow every frame (installed with the frame-rate patches).
+static void InstallSlowMo(const char* ini)
+{
+    if (!GetPrivateProfileIntA("Fixes", "SlowMoFix", cfg::kSlowMoFix, ini)) { Log("Slow-motion fix disabled (SlowMoFix=0)."); return; }
+    if (!Matches("SlowA", VA_SLOW_A, kSlowAOrig, sizeof kSlowAOrig) || !Matches("SlowB", VA_SLOW_B, kSlowBOrig, sizeof kSlowBOrig) ||
+        !Matches("HitDelay", VA_HITSTOP_DELAY, kHitDelayOrig, sizeof kHitDelayOrig) ||
+        !Matches("HitTime", VA_HITSTOP_TIME, kHitTimeOrig, sizeof kHitTimeOrig)) {
+        Log("Slow-motion fix: signatures do not match. Not applied.");
+        return;
+    }
+    g_slowAHoldRet = VA_SLOW_A + g_delta + 14;   // the JMP +17 after MOV [EDX+24],EAX
+    g_slowATimeRet = VA_SLOW_A + g_delta + 22;   // the JG after CMP [EDX+20],EBX
+    g_slowBHoldRet = VA_SLOW_B + g_delta + 14;
+    g_slowBTimeRet = VA_SLOW_B + g_delta + 22;
+    g_hitDelayRet = VA_HITSTOP_DELAY + g_delta + 7;
+    g_hitTimeRet = VA_HITSTOP_TIME + g_delta + 7;
+    WriteJmp(VA_SLOW_A + 7, &SlowAHold, 7);
+    WriteJmp(VA_SLOW_A + 16, &SlowATime, 6);
+    WriteJmp(VA_SLOW_B + 7, &SlowBHold, 7);
+    WriteJmp(VA_SLOW_B + 16, &SlowBTime, 6);
+    WriteJmp(VA_HITSTOP_DELAY, &HitDelay, 7);
+    WriteJmp(VA_HITSTOP_TIME, &HitTime, 7);
+    Log("Slow-motion fix applied: timed slow-downs and hit-stop last as long as at 60 fps (6 counters).");
 }
 
 // Scales frame-counted button-mash QTE logic by the frame multiplier.
@@ -1886,6 +1991,7 @@ static void Install()
 
     // Depends on LimiterHook updating g_qteDecay / g_ticks60 every frame.
     InstallQte(ini);
+    InstallSlowMo(ini);
     InstallBlade(ini);
     InstallEffects(ini);
     InstallTitleFps(ini);
