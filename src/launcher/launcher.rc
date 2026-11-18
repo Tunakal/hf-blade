@@ -40,8 +40,7 @@ END
 1 ICON "launcher.ico"
 #endif
 
-// Built-in Play-page banner: Tunahan's own Raiden drawing, tinted (same license as the project).
-2 RCDATA "banner.jpg"
+// The Play-page banner is not embedded: it ships as hfblade-banner.jpg next to the exe (launcher.cpp).
 
 // Borderless window. This template only lists the controls (in tab order); launcher.cpp (BuildLayout)
 // sizes the window and positions every control, and paints the sidebar, cards and descriptions.

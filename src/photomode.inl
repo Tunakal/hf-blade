@@ -81,37 +81,6 @@ static struct {
     bool huntPrev = false, huntNext = false;
 } g_pm;
 
-// Mouse look uses raw input on a message-only window of our own thread: relative motion straight
-// from the device, so it does not fight the game, which moves and clips the cursor itself.
-static volatile LONG g_rawDx = 0, g_rawDy = 0;
-static LRESULT CALLBACK RawMouseProc(HWND h, UINT m, WPARAM w, LPARAM l)
-{
-    if (m == WM_INPUT) {
-        RAWINPUT ri; UINT size = sizeof ri;
-        if (GetRawInputData(reinterpret_cast<HRAWINPUT>(l), RID_INPUT, &ri, &size, sizeof(RAWINPUTHEADER)) != (UINT)-1 &&
-            ri.header.dwType == RIM_TYPEMOUSE && !(ri.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)) {
-            InterlockedExchangeAdd(&g_rawDx, ri.data.mouse.lLastX);
-            InterlockedExchangeAdd(&g_rawDy, ri.data.mouse.lLastY);
-        }
-    }
-    return DefWindowProcW(h, m, w, l);
-}
-static DWORD WINAPI RawMouseThread(void*)
-{
-    WNDCLASSW wc = {};
-    wc.lpfnWndProc = RawMouseProc;
-    wc.hInstance = GetModuleHandleW(nullptr);
-    wc.lpszClassName = L"HFBladeRawMouse";
-    RegisterClassW(&wc);
-    HWND w = CreateWindowExW(0, wc.lpszClassName, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, wc.hInstance, nullptr);
-    RAWINPUTDEVICE d = { 0x01, 0x02, RIDEV_INPUTSINK, w };   // generic desktop / mouse
-    if (!w || !RegisterRawInputDevices(&d, 1, sizeof d)) { Log("Photo mode: raw mouse unavailable (%lu).", GetLastError()); return 0; }
-    MSG msg;
-    while (GetMessageW(&msg, nullptr, 0, 0) > 0) DispatchMessageW(&msg);
-    return 0;
-}
-
-
 typedef DWORD (WINAPI* XInputGetStateFn)(DWORD, void*);
 static XInputGetStateFn g_xinputGet = nullptr;
 struct XPad { DWORD packet; WORD buttons; BYTE lt, rt; SHORT lx, ly, rx, ry; };
@@ -232,8 +201,6 @@ static void PhotoEnter()
     g_photoHideUi = 1;
     g_photoActive = 1;
     PhotoAudio(true);
-    InterlockedExchange(&g_rawDx, 0);
-    InterlockedExchange(&g_rawDy, 0);
     memset(g_uiLayerSeen, 0, sizeof g_uiLayerSeen);
     Log("photo mode: on (eye %.2f %.2f %.2f, fov %.3f)", g_pm.eye.x, g_pm.eye.y, g_pm.eye.z, g_pm.fov);
 }
@@ -337,13 +304,6 @@ static void PhotoTick(float dt)
         if (KeyDown(VK_MENU)) slow = true;
         if (KeyDown('R')) { g_pm.roll = 0; g_pm.fov = g_photoSavedFov > 0.1f ? g_photoSavedFov : g_pm.fov; }
     }
-    {   // mouse look: raw motion since the last frame (consumed even when unfocused)
-        const LONG dx = InterlockedExchange(&g_rawDx, 0), dy = InterlockedExchange(&g_rawDy, 0);
-        if (fg) {
-            g_pm.yaw -= dx * 0.0025f * (g_pm.fov / 0.8727f);   // slower when zoomed in
-            g_pm.pitch -= dy * 0.0025f * (g_pm.fov / 0.8727f);
-        }
-    }
     const float lookRate = 1.8f;   // rad/s at full stick
     g_pm.yaw -= look_x * lookRate * dt;
     g_pm.pitch += look_y * lookRate * dt;
@@ -402,6 +362,5 @@ static void InstallPhotoMode(const char* ini)
         const unsigned long l = strtoul(t, nullptr, 16);
         if (l < 128) { g_uiLayerMask[l >> 5] |= 1u << (l & 31); Log("Photo mode: also hiding UI layer 0x%02lX.", l); }
     }
-    if (HANDLE t = CreateThread(nullptr, 0, RawMouseThread, nullptr, 0, nullptr)) CloseHandle(t);
     Log("Photo mode: ready (key 0x%02X, gamepad %s).", g_photoKey, g_xinputGet ? "yes" : "no");
 }

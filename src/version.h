@@ -4,7 +4,7 @@
 
 #define HFB_VERSION_MAJOR 0
 #define HFB_VERSION_MINOR 1
-#define HFB_VERSION_PATCH 1
+#define HFB_VERSION_PATCH 2
 
 #define HFB_STR2(x) #x
 #define HFB_STR(x) HFB_STR2(x)

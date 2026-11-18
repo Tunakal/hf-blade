@@ -85,15 +85,15 @@ You need Visual Studio 2022 with the C++ x86 tools. Run `build.bat`. The outputs
 
 1. Download `HF-Blade-<version>.zip` from the [Releases](https://github.com/Tunakal/hf-blade/releases)
    page.
-2. In Steam, right-click the game > Manage > Browse local files. Unzip `dinput8.dll`, `hfblade.ini`
-   and `hfblade-launcher.exe` into that folder, next to `METAL GEAR RISING REVENGEANCE.exe`.
+2. In Steam, right-click the game > Manage > Browse local files. Unzip `dinput8.dll`, `hfblade.ini`,
+   `hfblade-launcher.exe` and `hfblade-banner.jpg` into that folder, next to `METAL GEAR RISING REVENGEANCE.exe`.
 3. Run `hfblade-launcher.exe` to change settings, then **Save & Play**. Starting the game from Steam
    also works.
 4. In the game's graphics settings pick **1920x1080** and fullscreen. The mod renders it at your
    screen's resolution (`[Display] Height=-1`, the default), so 16:10 and ultrawide screens get a full
    picture with no black bars. On a 1920x1080 screen nothing changes.
 
-To uninstall, delete those three files (and `hfblade.log` if it is there).
+To uninstall, delete those four files (and `hfblade.log` if it is there).
 
 To build it yourself, run `build.bat` (Visual Studio 2022 C++ tools), then `py -3 tools/make_release.py`
 for the zip.
@@ -103,8 +103,9 @@ for the zip.
 Settings live in `hfblade.ini`. An older `mgr-hfr.ini` from before the rename is copied over
 automatically on first start.
 
-- **Launcher art.** The Play page shows a built-in banner: a Raiden drawing by the project author,
-  under the project's MIT license. To use your own picture instead, put an image named
+- **Launcher art.** The Play page shows a banner: a Raiden drawing by the project author, under the
+  project's MIT license, in `hfblade-banner.jpg` next to the launcher (without it the page shows a
+  dark gradient). To use your own picture instead, put an image named
   `hfblade-launcher-art.jpg` or `.png` next to the launcher. No game art ships with this project.
 - **Launcher sounds.** The opening cuts play three sword sounds that the launcher synthesizes in code,
   at a random pitch, volume and stereo position. To use your own, put `.mp3` or `.wav` files in a

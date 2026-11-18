@@ -19,6 +19,7 @@ def main():
     files = [
         ('build/dinput8.dll', 'dinput8.dll'),
         ('build/hfblade-launcher.exe', 'hfblade-launcher.exe'),
+        ('src/launcher/banner.jpg', 'hfblade-banner.jpg'),
         ('hfblade.ini', 'hfblade.ini'),
         ('README.md', 'README.md'),
         ('LICENSE', 'LICENSE.txt'),

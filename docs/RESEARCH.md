@@ -539,8 +539,9 @@ Fuller notes are in `evidence/photo_*.md`.
   jump: the game also moves and clips the cursor. The second (raw input, `RIDEV_INPUTSINK` on a
   message-only window in its own thread) receives no motion in game (test 2026-11-13). A likely cause is
   that DirectInput 8 registers raw mouse input for the same process, and a process has only one target
-  window per device type. Next step: read the game's own DirectInput mouse state instead (the mod is the
-  dinput8 proxy), or look at how other free cameras do it.
+  window per device type. The raw-input thread was removed in 0.1.2: it never worked, and a background
+  input sink on a hidden window is a pattern antivirus heuristics flag. Next step: read the game's own
+  DirectInput mouse state instead (the mod is the dinput8 proxy), or look at how other free cameras do it.
 - World layers, post effects and fades (0x65, 0x68) are untouched.
 
 **Audio** (added after the first photo-mode test)

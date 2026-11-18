@@ -127,34 +127,6 @@ static void Txt(Graphics& g, HDC dc, const wchar_t* s, RECT rc, HFONT font, COLO
 // Banner crop focus: the image row (fraction of its height) placed at a given banner row.
 static float g_artFocusY = 0.555f, g_artFocusAt = 0.52f;   // user cover art: Raiden's eye
 
-// Built-in banner: Tunahan's own Raiden drawing (src/launcher/banner.jpg, RCDATA 2), tinted for the
-// dark theme. Used when no key-art file sits next to the exe.
-static Bitmap* LoadEmbeddedBanner()
-{
-    HMODULE mod = GetModuleHandleW(nullptr);
-    HRSRC r = FindResourceW(mod, MAKEINTRESOURCEW(2), MAKEINTRESOURCEW(10));   // RT_RCDATA
-    if (!r) return nullptr;
-    const DWORD size = SizeofResource(mod, r);
-    const void* data = LockResource(LoadResource(mod, r));
-    if (!data || !size) return nullptr;
-    HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, size);
-    if (!mem) return nullptr;
-    memcpy(GlobalLock(mem), data, size);
-    GlobalUnlock(mem);
-    IStream* stream = nullptr;
-    if (FAILED(CreateStreamOnHGlobal(mem, TRUE, &stream))) { GlobalFree(mem); return nullptr; }
-    Bitmap* src = Bitmap::FromStream(stream);
-    Bitmap* copy = nullptr;
-    if (src && src->GetLastStatus() == Ok) {   // copy so the stream can be released
-        copy = new Bitmap(src->GetWidth(), src->GetHeight(), PixelFormat32bppARGB);
-        Graphics g(copy);
-        g.DrawImage(src, 0, 0, src->GetWidth(), src->GetHeight());
-    }
-    delete src;
-    stream->Release();
-    return copy;
-}
-
 static void LoadArt()
 {
     const wchar_t* names[] = { L"hfblade-launcher-art.jpg", L"hfblade-launcher-art.png", L"mgr-hfr-launcher-art.jpg", L"mgr-hfr-launcher-art.png" };
@@ -166,7 +138,14 @@ static void LoadArt()
         if (b && b->GetLastStatus() == Ok) { g_art = b; return; }
         delete b;
     }
-    if ((g_art = LoadEmbeddedBanner()) != nullptr) { g_artFocusY = 0.33f; g_artFocusAt = 0.42f; }   // drawing: masked face
+    // Default banner: Tunahan's own Raiden drawing, shipped as a file next to the exe rather than
+    // embedded (a large compressed resource makes antivirus machine-learning heuristics suspicious).
+    wchar_t path[MAX_PATH];
+    swprintf_s(path, L"%shfblade-banner.jpg", g_dir);
+    if (GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) return;   // no file: dark gradient
+    Bitmap* b = Bitmap::FromFile(path);
+    if (b && b->GetLastStatus() == Ok) { g_art = b; g_artFocusY = 0.33f; g_artFocusAt = 0.42f; return; }   // drawing: masked face
+    delete b;
 }
 
 // ---------------------------------------------------------------------------
